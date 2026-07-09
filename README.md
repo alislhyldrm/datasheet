@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Datasheet Analiz
 
-## Getting Started
+Elektronik mühendisleri için kaynaklı, halüsinasyonsuz datasheet asistanı. PDF
+datasheet yükle, sor; her cevap **datasheet içindeki sayfa + birebir alıntı** ile
+gelir. Dokümanda olmayan bilgi uydurulmaz.
 
-First, run the development server:
+- **Model:** Claude Opus 4.8 (native PDF: tablolar + grafikler görsel olarak okunur)
+- **Citations API** ile her iddia sayfa referanslı — RAG yok, chunk hatası yok
+- İki datasheet'i yan yana karşılaştırma
+- Prompt caching: ilk sorudan sonra aynı datasheet ~%90 daha ucuz
+- Mobil öncelikli, koyu tema
+
+## Kurulum (lokal)
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local     # ANTHROPIC_API_KEY'i gir
+npm run dev                     # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`.env.local` içine Anthropic API anahtarını yaz:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Test
 
-## Learn More
+Gerçek datasheet (NE555) ile uçtan uca kabul testi. Dev server çalışırken:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run dev            # ayrı terminalde
+npm test               # scripts/run-test.mjs — upload + 14 soru + citation kontrolü
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Geçme kriteri: her sayısal cevap doğru + doğru sayfa citation'ı + tuzak soruda
+"datasheet'te yok". Detay: `scripts/test-qa.md`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deploy (GitHub → Vercel)
 
-## Deploy on Vercel
+1. Repo'yu GitHub'a push et.
+2. [vercel.com](https://vercel.com) → **Add New → Project → Import** (GitHub repo).
+3. **Environment Variables**: `ANTHROPIC_API_KEY` ekle.
+4. Deploy. Prod link telefondan kullanılabilir.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**4 MB üstü PDF** için: Vercel projesinde **Storage → Create Blob store** (token
+`BLOB_READ_WRITE_TOKEN` otomatik eklenir). Küçük PDF'ler bu olmadan çalışır.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Mimari
+
+```
+Tarayıcı → /api/upload (PDF → Anthropic Files API → file_id)
+        → /api/chat  (soru + file_id → Opus 4.8 stream + citations → SSE)
+```
+
+- `lib/prompts.ts` — katı sistem promptu (birim/koşul, min/typ/max, varyant, absolute-max ayrımı)
+- `app/api/chat/route.ts` — streaming + citations + cache_control
+- `components/CitationChip.tsx` — "s.14" rozeti → alıntı popover
+
+## Erişim / maliyet
+
+Şu an auth yok (açık link). Link yayılırsa API maliyeti hesap sahibine yazar.
+Basit tek-şifre eklemek için `middleware.ts` yeterli — ileride 10 dk'lık iş.

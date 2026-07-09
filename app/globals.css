@@ -1,26 +1,206 @@
 @import "tailwindcss";
 
+/* Theme is driven by [data-theme] on <html>, set pre-paint by the inline
+   script in layout.tsx. Not prefers-color-scheme directly: a manual override
+   has to be able to beat the OS setting. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+
+  --bg: oklch(0.985 0.002 160);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.965 0.003 160);
+  --ink: oklch(0.21 0.01 160);
+  --ink-muted: oklch(0.45 0.01 160);
+  --border: oklch(0.88 0.004 160);
+  --border-strong: oklch(0.78 0.005 160);
+  /* L=0.52 C=0.112 is the lightest in-sRGB-gamut emerald that keeps
+     accent-as-text >= 4.5:1 on every surface and accent-ink on accent >= 4.5:1. */
+  --accent: oklch(0.52 0.112 163);
+  --accent-hover: oklch(0.46 0.1 163);
+  --accent-ink: oklch(0.995 0 0);
+  --danger: oklch(0.55 0.19 25);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: oklch(0.17 0.006 160);
+  --surface: oklch(0.21 0.007 160);
+  --surface-2: oklch(0.19 0.006 160);
+  --ink: oklch(0.93 0.005 160);
+  --ink-muted: oklch(0.68 0.01 160);
+  --border: oklch(0.3 0.008 160);
+  --border-strong: oklch(0.4 0.01 160);
+  --accent: oklch(0.72 0.14 163);
+  --accent-hover: oklch(0.78 0.14 163);
+  --accent-ink: oklch(0.16 0.02 163);
+  --danger: oklch(0.68 0.17 25);
+}
+
+/* Semantic z scale. Nothing in this app needs a fourth digit. */
+:root {
+  --z-sticky: 10;
+  --z-overlay: 20;
+  --z-popover: 30;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-danger: var(--danger);
+
+  /* Fixed scale, ratio ~1.2. No fluid/clamp headings. */
+  --text-micro: 0.75rem; /* 12px — mono badges, indices */
+  --text-meta: 0.8125rem; /* 13px — secondary text */
+  --text-body: 0.9375rem; /* 15px — body, inputs, buttons */
+  --text-title: 1.125rem; /* 18px */
+  --text-display: 1.375rem; /* 22px */
+
+  --container-measure: 72ch;
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-size: var(--text-body);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+
+  /* The popover lives in the top layer, so it escapes the chat scroll
+     container. Strip the UA chrome; positioning is set inline on open. */
+  [popover] {
+    inset: auto;
+    margin: 0;
+    border: 0;
+    padding: 0;
+    overflow: visible;
+    background: transparent;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Transient marker on the page a citation just jumped to. */
+.pdf-flash {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Motion reports state, never decorates. Each rule is opt-in on
+   prefers-reduced-motion: no-preference, so the reduced-motion path is the
+   plain, instant one rather than a near-zero-duration animation. */
+@media (prefers-reduced-motion: no-preference) {
+  .msg-enter {
+    animation: msg-enter 200ms var(--ease-out-quart) both;
+  }
+
+  /* Only below lg, where the panel is closed by default and can therefore
+     only appear because the reader asked for it. At lg it is open on load,
+     and animating that would be page-load choreography. */
+  @media (width < 64rem) {
+    .panel-enter {
+      animation: panel-enter 200ms var(--ease-out-quart) both;
+    }
+  }
+}
+
+@keyframes msg-enter {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes panel-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Steady by default; only blinks when motion is welcome. */
+.caret {
+  display: inline-block;
+  width: 1px;
+  height: 1em;
+  background: var(--accent);
+  vertical-align: text-bottom;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .caret {
+    animation: caret-blink 1.1s steps(1) infinite;
+  }
+}
+
+@keyframes caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
