@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getClient, MODEL, MAX_TOKENS, FILES_BETA } from "@/lib/anthropic";
 import { SYSTEM_PROMPT } from "@/lib/prompts";
+import { rateLimit } from "@/lib/api-guard";
 import type { HistoryTurn } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -14,11 +15,42 @@ interface ChatBody {
   history: HistoryTurn[];
 }
 
+// Anthropic Files API ids: "file_" + base62-ish tail. Anything else is junk
+// or a probe and never reaches the API.
+const FILE_ID = /^file_[A-Za-z0-9_-]{1,64}$/;
+const MAX_FILES = 5;
+const MAX_QUESTION_CHARS = 4000;
+// Bounds the request body without clipping real conversations: MAX_TOKENS of
+// output is roughly 50k characters, and 50 turns is a very long session.
+const MAX_HISTORY_TURNS = 50;
+const MAX_TURN_CHARS = 60_000;
+
+function validHistory(history: unknown): history is HistoryTurn[] {
+  if (!Array.isArray(history) || history.length > MAX_HISTORY_TURNS) {
+    return false;
+  }
+  return history.every((turn) => {
+    if (!turn || typeof turn !== "object") return false;
+    const { role, text } = turn as { role?: unknown; text?: unknown };
+    return (
+      (role === "user" || role === "assistant") &&
+      typeof text === "string" &&
+      text.length <= MAX_TURN_CHARS
+    );
+  });
+}
+
 function sse(obj: unknown): string {
   return `data: ${JSON.stringify(obj)}\n\n`;
 }
 
 export async function POST(req: NextRequest) {
+  if (!rateLimit(req, "chat", 20)) {
+    return new Response("Çok fazla istek. Bir dakika sonra tekrar deneyin.", {
+      status: 429,
+    });
+  }
+
   let body: ChatBody;
   try {
     body = (await req.json()) as ChatBody;
@@ -27,11 +59,25 @@ export async function POST(req: NextRequest) {
   }
 
   const { fileIds, fileNames, question, history } = body;
-  if (!Array.isArray(fileIds) || fileIds.length === 0) {
-    return new Response("En az bir datasheet gerekli", { status: 400 });
+  if (
+    !Array.isArray(fileIds) ||
+    fileIds.length === 0 ||
+    fileIds.length > MAX_FILES ||
+    !fileIds.every((id) => typeof id === "string" && FILE_ID.test(id))
+  ) {
+    return new Response("En az bir geçerli datasheet gerekli", { status: 400 });
   }
-  if (!question || typeof question !== "string") {
-    return new Response("Soru gerekli", { status: 400 });
+  if (
+    !question ||
+    typeof question !== "string" ||
+    question.length > MAX_QUESTION_CHARS
+  ) {
+    return new Response("Soru gerekli (en fazla 4000 karakter)", {
+      status: 400,
+    });
+  }
+  if (history !== undefined && !validHistory(history)) {
+    return new Response("Geçersiz sohbet geçmişi", { status: 400 });
   }
 
   const client = getClient();
@@ -43,7 +89,10 @@ export async function POST(req: NextRequest) {
     (fileId, i) => ({
       type: "document",
       source: { type: "file", file_id: fileId },
-      title: fileNames?.[i] || `datasheet-${i + 1}.pdf`,
+      title:
+        (Array.isArray(fileNames) && typeof fileNames[i] === "string"
+          ? fileNames[i].slice(0, 200)
+          : "") || `datasheet-${i + 1}.pdf`,
       citations: { enabled: true },
       ...(i === fileIds.length - 1
         ? { cache_control: { type: "ephemeral" as const } }
@@ -130,10 +179,9 @@ export async function POST(req: NextRequest) {
         } else if (err instanceof Anthropic.APIError && err.status === 404) {
           message =
             "Datasheet dosyası bulunamadı veya süresi doldu. PDF'i tekrar yükleyin.";
-        } else if (err instanceof Error) {
-          message = err.message;
         }
-        console.error("[chat]", message);
+        // Unmapped errors keep the generic message; details stay server-side.
+        console.error("[chat]", err);
         send({ type: "error", message });
       } finally {
         controller.close();

@@ -1,5 +1,6 @@
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit } from "@/lib/api-guard";
 
 export const runtime = "nodejs";
 
@@ -8,6 +9,13 @@ export const runtime = "nodejs";
 // this to get a short-lived token, uploads the PDF directly to Blob, then
 // hands the resulting URL to /api/upload.
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  if (!rateLimit(req, "blob-upload", 10)) {
+    return NextResponse.json(
+      { error: "Çok fazla yükleme. Bir dakika sonra tekrar deneyin." },
+      { status: 429 }
+    );
+  }
+
   const body = (await req.json()) as HandleUploadBody;
   try {
     const result = await handleUpload({
@@ -24,7 +32,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     });
     return NextResponse.json(result);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Blob upload failed";
-    return NextResponse.json({ error: message }, { status: 400 });
+    console.error("[blob-upload]", err);
+    return NextResponse.json({ error: "Yükleme başarısız" }, { status: 400 });
   }
 }
