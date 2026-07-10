@@ -24,16 +24,6 @@ npm run dev                     # http://localhost:3000
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Uygulamanın önünde HTTP Basic auth var. `APP_PASSWORD` boşsa geliştirmede kapı
-açılmaz (yerel çalışma sürtünmesiz kalsın diye), ama production'da sunucu hiçbir
-isteği karşılamaz — açık deploy etmek imkânsız. Yerelde kapıyı denemek için:
-
-```
-APP_PASSWORD=<paylaşılan-şifre>
-```
-
-Kullanıcı adı önemsiz; yalnızca şifre doğrulanır.
-
 ## Test
 
 Gerçek datasheet (NE555) ile uçtan uca kabul testi. Dev server çalışırken:
@@ -50,9 +40,12 @@ Geçme kriteri: her sayısal cevap doğru + doğru sayfa citation'ı + tuzak sor
 
 1. Repo'yu GitHub'a push et.
 2. [vercel.com](https://vercel.com) → **Add New → Project → Import** (GitHub repo).
-3. **Environment Variables**: `ANTHROPIC_API_KEY` ve `APP_PASSWORD` ekle.
-   `APP_PASSWORD` eksikse deploy açılır ama her istek 500 döner.
-4. Deploy. Prod link telefondan kullanılabilir; ilk açılışta şifre sorar.
+3. **Environment Variables**: `ANTHROPIC_API_KEY` ekle.
+4. Deploy. Prod link telefondan kullanılabilir.
+
+> Uygulamada kimlik doğrulaması yok: linki bilen herkes soru sorabilir ve her
+> soru Anthropic faturasına yazılır. Anthropic konsolunda harcama limiti tanımlı
+> tutun ve linki dar paylaşın.
 
 **4 MB üstü PDF** için: Vercel projesinde **Storage → Create Blob store** (token
 `BLOB_READ_WRITE_TOKEN` otomatik eklenir). Küçük PDF'ler bu olmadan çalışır.
