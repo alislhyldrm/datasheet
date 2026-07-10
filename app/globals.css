@@ -5,42 +5,132 @@
    has to be able to beat the OS setting. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/* ── Brand ────────────────────────────────────────────────────────────────
+   Three fixed values. Every other colour derives from them.
+
+   Accent lock: LIME is the accent. MINT is not a second accent; it only ever
+   appears as the terminal stop of the accent gradient, never alone on a
+   control. NAVY is the canvas in dark and the ink in light. */
+:root {
+  --lime: #b6f379;
+  --mint: #8bfdc3;
+  --navy: #092339;
+}
+
+/* ── Elevation model ──────────────────────────────────────────────────────
+   Four layers, in painting order. Getting these confused is what makes a
+   glass UI look like flat grey mud:
+
+     bg      the mesh. Painted once, on <body>. Never scrolls.
+     panel   large opaque regions that host a scroll container.
+     card    opaque content surfaces INSIDE a scroll container.
+     chrome  translucent glass. Fixed/sticky chrome ONLY.
+
+   backdrop-filter belongs to `chrome` and nothing else. On a scrolling
+   surface it repaints every frame and mutes the very colour it samples. */
+
 :root {
   color-scheme: light;
 
-  --bg: oklch(0.985 0.002 160);
-  --surface: oklch(1 0 0);
-  --surface-2: oklch(0.965 0.003 160);
-  --ink: oklch(0.21 0.01 160);
-  --ink-muted: oklch(0.45 0.01 160);
-  --border: oklch(0.88 0.004 160);
-  --border-strong: oklch(0.78 0.005 160);
-  /* L=0.52 C=0.112 is the lightest in-sRGB-gamut emerald that keeps
-     accent-as-text >= 4.5:1 on every surface and accent-ink on accent >= 4.5:1. */
-  --accent: oklch(0.52 0.112 163);
-  --accent-hover: oklch(0.46 0.1 163);
-  --accent-ink: oklch(0.995 0 0);
-  --danger: oklch(0.55 0.19 25);
+  --bg: #e9eff0;
+  --glow-lime: rgb(182 243 121 / 0.42);
+  --glow-mint: rgb(139 253 195 / 0.38);
+  --glow-deep: rgb(9 35 57 / 0.06);
+
+  --panel: #f1f5f5;
+  --card: #ffffff;
+  --card-2: #eef3f3;
+  --paper: #ffffff;
+
+  --chrome: rgb(255 255 255 / 0.62);
+  --chrome-solid: #f4f8f8; /* backdrop-filter / reduced-transparency fallback */
+
+  --hairline: rgb(9 35 57 / 0.09);
+  --hairline-strong: rgb(9 35 57 / 0.2);
+  --edge-top: rgb(255 255 255 / 0.9);
+  --neu-light: rgb(255 255 255 / 0.95);
+
+  /* Shadows carry the canvas hue. Pure black on a mint-tinted page reads dirty. */
+  --shadow-rgb: 9 35 57;
+  --grain-opacity: 0.035;
+
+  --ink: #0b2438;
+  --ink-muted: #4d626f;
+
+  /* Lime cannot clear 4.5:1 as text on anything lighter than mid-grey, so the
+     accent *text* colour in light mode is a deep mint (6.5:1 on --card).
+     Lime survives here only as a fill, always under navy ink. */
+  --accent: #0f6b4c;
+  --accent-hover: #0a563d;
+  --accent-ink: var(--navy);
+  --accent-soft: rgb(15 107 76 / 0.1);
+  --accent-ring: rgb(15 107 76 / 0.32);
+  --accent-glow: rgb(15 107 76 / 0.35);
+
+  --danger: #b3261e;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: oklch(0.17 0.006 160);
-  --surface: oklch(0.21 0.007 160);
-  --surface-2: oklch(0.19 0.006 160);
-  --ink: oklch(0.93 0.005 160);
-  --ink-muted: oklch(0.68 0.01 160);
-  --border: oklch(0.3 0.008 160);
-  --border-strong: oklch(0.4 0.01 160);
-  --accent: oklch(0.72 0.14 163);
-  --accent-hover: oklch(0.78 0.14 163);
-  --accent-ink: oklch(0.16 0.02 163);
-  --danger: oklch(0.68 0.17 25);
+  --bg: #092339;
+  --glow-lime: rgb(182 243 121 / 0.16);
+  --glow-mint: rgb(139 253 195 / 0.14);
+  --glow-deep: rgb(3 12 22 / 0.55);
+
+  --panel: #0b2a42;
+  --card: #10314a;
+  --card-2: #163a55;
+  --paper: #ffffff;
+
+  --chrome: rgb(16 49 74 / 0.62);
+  --chrome-solid: #0e2c44;
+
+  /* Mint-tinted hairlines, not plain white. Keeps the brand in the seams. */
+  --hairline: rgb(139 253 195 / 0.12);
+  --hairline-strong: rgb(139 253 195 / 0.24);
+  --edge-top: rgb(255 255 255 / 0.08);
+  --neu-light: rgb(255 255 255 / 0.05);
+
+  --shadow-rgb: 2 10 20;
+  --grain-opacity: 0.05;
+
+  --ink: #e6f2ea;
+  --ink-muted: rgb(230 242 234 / 0.62);
+
+  --accent: var(--lime);
+  --accent-hover: #c8f795;
+  --accent-ink: var(--navy);
+  --accent-soft: rgb(182 243 121 / 0.12);
+  --accent-ring: rgb(182 243 121 / 0.34);
+  --accent-glow: rgb(182 243 121 / 0.3);
+
+  --danger: #ff9b93;
 }
 
-/* Semantic z scale. Nothing in this app needs a fourth digit. */
 :root {
+  /* Neumorphic light source: above-left, everywhere, no exceptions. One pair
+     of tokens drives both the raised and the sunken read so they can never
+     disagree about where the light is. */
+  --raise:
+    -5px -5px 14px -6px var(--neu-light),
+    6px 10px 24px -12px rgb(var(--shadow-rgb) / 0.55),
+    inset 0 1px 0 0 var(--edge-top);
+  --raise-sm:
+    -2px -2px 6px -3px var(--neu-light),
+    2px 4px 12px -6px rgb(var(--shadow-rgb) / 0.45),
+    inset 0 1px 0 0 var(--edge-top);
+  --sink:
+    inset 3px 3px 8px -2px rgb(var(--shadow-rgb) / 0.32),
+    inset -2px -2px 6px -2px var(--neu-light);
+
+  --blur: blur(24px) saturate(165%);
+
+  /* Semantic z scale. Nothing in this app needs a fourth digit. */
+  /* Grain sits under the app, above the mesh: it textures the background, not
+     the PDF page. Everything opaque hides it, which is the intent. */
+  --z-grain: 0;
+  --z-app: 1;
   --z-sticky: 10;
   --z-overlay: 20;
   --z-popover: 30;
@@ -50,28 +140,42 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
+  --color-lime: var(--lime);
+  --color-mint: var(--mint);
+  --color-navy: var(--navy);
+
   --color-bg: var(--bg);
-  --color-surface: var(--surface);
-  --color-surface-2: var(--surface-2);
+  --color-panel: var(--panel);
+  --color-card: var(--card);
+  --color-card-2: var(--card-2);
+  --color-paper: var(--paper);
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
-  --color-border: var(--border);
-  --color-border-strong: var(--border-strong);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ring: var(--accent-ring);
   --color-danger: var(--danger);
 
   /* Fixed scale, ratio ~1.2. No fluid/clamp headings. */
-  --text-micro: 0.75rem; /* 12px — mono badges, indices */
-  --text-meta: 0.8125rem; /* 13px — secondary text */
-  --text-body: 0.9375rem; /* 15px — body, inputs, buttons */
+  --text-micro: 0.75rem; /* 12px - mono badges, indices */
+  --text-meta: 0.8125rem; /* 13px - secondary text */
+  --text-body: 0.9375rem; /* 15px - body, inputs, buttons */
   --text-title: 1.125rem; /* 18px */
-  --text-display: 1.375rem; /* 22px */
+  --text-display: 1.625rem; /* 26px */
 
-  --container-measure: 72ch;
+  /* Shape lock. Containers 20px, controls 14px, inner badges 8px, chips full.
+     Nothing on this page picks a radius outside this ladder. */
+  --radius-card: 1.25rem;
+  --radius-control: 0.875rem;
+  --radius-inner: 0.5rem;
 
-  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --container-measure: 65ch;
+
+  --ease-fluid: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @layer base {
@@ -80,9 +184,28 @@
   }
 
   body {
-    background: var(--bg);
+    background-color: var(--bg);
     color: var(--ink);
     font-size: var(--text-body);
+    /* The grain blends against the mesh below it. Without isolation the two
+       would sit in the root stacking context, where the mesh has already been
+       propagated to the canvas and a blend mode has nothing to mix with. */
+    isolation: isolate;
+  }
+
+  /* The mesh. A real fixed layer, not a canvas background: glass samples it,
+     grain blends into it, and it never scrolls. Painted once. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      radial-gradient(58rem 40rem at 82% -6%, var(--glow-mint), transparent 62%),
+      radial-gradient(52rem 38rem at 6% 12%, var(--glow-lime), transparent 58%),
+      radial-gradient(80rem 55rem at 50% 118%, var(--glow-deep), transparent 72%);
+    background-repeat: no-repeat;
   }
 
   :focus-visible {
@@ -100,14 +223,19 @@
     text-wrap: pretty;
   }
 
+  /* Measurements line up column-wise in tables and page counters. */
+  :where(.font-mono) {
+    font-variant-numeric: tabular-nums;
+  }
+
   ::selection {
-    background: var(--accent);
-    color: var(--accent-ink);
+    background: var(--lime);
+    color: var(--navy);
   }
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--border-strong) transparent;
+    scrollbar-color: var(--hairline-strong) transparent;
   }
 
   /* The popover lives in the top layer, so it escapes the chat scroll
@@ -122,18 +250,148 @@
   }
 }
 
+@layer components {
+  /* GLASS. Fixed and sticky chrome only: header, composer, toolbars, popover.
+     Never a scrolling surface. */
+  .chrome {
+    background-color: var(--chrome);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+  }
+
+  /* Floating glass: chrome that is detached on all sides (the popover). */
+  .chrome-float {
+    background-color: var(--chrome);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    border: 1px solid var(--hairline-strong);
+    box-shadow:
+      0 24px 60px -20px rgb(var(--shadow-rgb) / 0.6),
+      inset 0 1px 0 0 var(--edge-top);
+  }
+
+  /* OPAQUE + NEUMORPHIC. Everything that lives inside a scroll container. */
+  .card {
+    background-color: var(--card);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--raise-sm);
+  }
+
+  .card-lg {
+    background-color: var(--card);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--raise);
+  }
+
+  /* Sunken: same light source, so the highlight moves to the bottom-right.
+     Inputs, code wells, the track of a segmented control. */
+  .well {
+    background-color: var(--card-2);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--sink);
+  }
+
+  /* The only saturated surface in the app. Navy on lime reads 12.3:1. */
+  .btn-accent {
+    background-image: linear-gradient(135deg, var(--lime), var(--mint));
+    color: var(--navy);
+    box-shadow:
+      0 12px 32px -14px var(--accent-glow),
+      inset 0 1px 0 0 rgb(255 255 255 / 0.5);
+  }
+
+  .btn-accent:not(:disabled):hover {
+    filter: brightness(1.06);
+  }
+
+  .btn-accent:disabled {
+    background-image: none;
+    background-color: var(--card-2);
+    box-shadow: var(--sink);
+  }
+
+  /* Direct manipulation, not choreography: stays out of the reduced-motion
+     opt-in because a press must always answer the finger. */
+  .press:not(:disabled):active {
+    transform: translateY(1px) scale(0.99);
+  }
+
+  .z-sticky {
+    z-index: var(--z-sticky);
+  }
+
+  .z-app {
+    z-index: var(--z-app);
+  }
+
+  /* Fixed, pointer-events-none, painted once. Attaching grain to a scrolling
+     container would repaint the filter on every frame. */
+  .grain {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-grain);
+    pointer-events: none;
+    opacity: var(--grain-opacity);
+    mix-blend-mode: overlay;
+    /* Desaturated: chromatic noise over a two-green palette reads as artefact,
+       not as texture. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}
+
+/* Two ways the glass can fail. Both land on the same opaque surface: without
+   a real blur, translucent chrome over a colour mesh destroys text contrast. */
+@supports not (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+  .chrome,
+  .chrome-float {
+    background-color: var(--chrome-solid);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .chrome,
+  .chrome-float {
+    background-color: var(--chrome-solid);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .grain {
+    display: none;
+  }
+}
+
 /* Transient marker on the page a citation just jumped to. */
 .pdf-flash {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 
+/* Skeletons match the shape of what is loading. No spinners anywhere. */
+.skeleton {
+  background-color: var(--card);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--card-2) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+}
+
 /* Motion reports state, never decorates. Each rule is opt-in on
    prefers-reduced-motion: no-preference, so the reduced-motion path is the
    plain, instant one rather than a near-zero-duration animation. */
 @media (prefers-reduced-motion: no-preference) {
+  .skeleton {
+    animation: shimmer 1.6s linear infinite;
+  }
+
   .msg-enter {
-    animation: msg-enter 200ms var(--ease-out-quart) both;
+    animation: msg-enter 220ms var(--ease-fluid) both;
   }
 
   /* Only below lg, where the panel is closed by default and can therefore
@@ -141,15 +399,24 @@
      and animating that would be page-load choreography. */
   @media (width < 64rem) {
     .panel-enter {
-      animation: panel-enter 200ms var(--ease-out-quart) both;
+      animation: panel-enter 220ms var(--ease-fluid) both;
     }
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
   }
 }
 
 @keyframes msg-enter {
   from {
     opacity: 0;
-    transform: translateY(2px);
+    transform: translateY(3px);
   }
   to {
     opacity: 1;
@@ -171,8 +438,9 @@
 /* Steady by default; only blinks when motion is welcome. */
 .caret {
   display: inline-block;
-  width: 1px;
+  width: 2px;
   height: 1em;
+  border-radius: 1px;
   background: var(--accent);
   vertical-align: text-bottom;
 }

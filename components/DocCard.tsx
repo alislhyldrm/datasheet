@@ -18,9 +18,9 @@ export default function DocCard({
   onRemove: (fileId: string) => void;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-surface-2 py-1.5 pr-1.5 pl-2.5">
-      <span className="shrink-0 font-mono text-micro text-accent">
-        [{index + 1}]
+    <div className="card flex min-w-0 items-center gap-2 rounded-control py-1.5 pr-1.5 pl-2">
+      <span className="shrink-0 rounded-inner bg-accent-soft px-1.5 py-0.5 font-mono text-micro font-medium text-accent">
+        {index + 1}
       </span>
 
       <span className="min-w-0">
@@ -38,7 +38,7 @@ export default function DocCard({
         onClick={() => onRemove(doc.fileId)}
         aria-label={`${doc.fileName} dokümanını kaldır`}
         title="Kaldır"
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-ink-muted transition-colors duration-150 ease-out hover:bg-surface hover:text-danger"
+        className="press flex size-11 shrink-0 items-center justify-center rounded-inner text-ink-muted transition-all duration-200 ease-fluid hover:bg-card-2 hover:text-danger"
       >
         <X size={16} strokeWidth={2} aria-hidden="true" />
       </button>

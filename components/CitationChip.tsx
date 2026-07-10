@@ -101,18 +101,21 @@ export default function CitationChip({
         aria-expanded={open}
         aria-controls={id}
         aria-label={`Kaynağı göster: ${label}`}
-        className="relative mx-0.5 inline-flex items-center rounded bg-surface px-1.5 py-0.5 align-baseline font-mono text-micro font-medium text-accent ring-1 ring-inset ring-accent/40 transition-colors duration-150 ease-out after:absolute after:-inset-3 after:content-[''] hover:bg-surface-2"
+        className="relative mx-0.5 inline-flex items-center rounded-inner bg-accent-soft px-1.5 py-0.5 align-baseline font-mono text-micro font-medium text-accent ring-1 ring-accent-ring ring-inset transition-all duration-200 ease-fluid after:absolute after:-inset-3 after:content-[''] hover:bg-accent/20"
       >
         {label}
       </button>
 
+      {/* A bare `block` here would be an author rule beating the UA's
+          `[popover]:not(:popover-open) { display: none }`, leaving every
+          citation popover pinned open over the transcript. */}
       <span
         ref={popoverRef}
         id={id}
         popover="auto"
         role="dialog"
         aria-label="Kaynak alıntısı"
-        className="block rounded-lg border border-border bg-surface p-2.5 text-left shadow-xl"
+        className="chrome-float hidden rounded-control p-3 text-left [&:popover-open]:block"
       >
         {showDoc && citation.documentTitle && (
           <span className="mb-1 block truncate font-mono text-micro text-ink-muted">
@@ -127,7 +130,7 @@ export default function CitationChip({
           type="button"
           popoverTarget={id}
           popoverTargetAction="hide"
-          className="mt-1 flex min-h-11 items-center gap-1 text-micro text-ink-muted transition-colors duration-150 ease-out hover:text-ink"
+          className="mt-1 flex min-h-11 items-center gap-1 text-micro text-ink-muted transition-all duration-200 ease-fluid hover:text-accent"
         >
           <X size={12} aria-hidden="true" />
           kapat

@@ -38,7 +38,7 @@ export default function ThemeToggle() {
       type="button"
       onClick={toggle}
       aria-label="Temayı değiştir"
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors duration-150 ease-out hover:bg-surface-2 hover:text-ink"
+      className="press flex size-11 shrink-0 items-center justify-center rounded-control border border-hairline text-ink-muted transition-all duration-200 ease-fluid hover:border-accent-ring hover:text-accent"
     >
       <Sun size={20} strokeWidth={1.75} className="hidden dark:block" />
       <Moon size={20} strokeWidth={1.75} className="block dark:hidden" />

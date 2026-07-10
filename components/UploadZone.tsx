@@ -58,7 +58,7 @@ export default function UploadZone({
   }
 
   return (
-    <div className={compact ? "" : "w-full"}>
+    <div className={compact ? "" : "flex h-full w-full flex-col"}>
       <button
         type="button"
         disabled={busy}
@@ -74,12 +74,14 @@ export default function UploadZone({
           const file = e.dataTransfer.files?.[0];
           if (file) handleFile(file);
         }}
-        className={`relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl border border-dashed px-4 text-center transition-colors duration-150 ease-out ${
-          compact ? "min-h-11 py-3 text-meta" : "py-10 text-body"
+        className={`press relative flex w-full items-center justify-center gap-2 overflow-hidden border-dashed px-4 text-center transition-all duration-200 ease-fluid ${
+          compact
+            ? "card min-h-11 rounded-control py-3 text-meta"
+            : "card-lg h-full flex-col justify-center rounded-card py-20 text-body"
         } ${
           dragOver
-            ? "border-accent bg-surface-2"
-            : "border-border-strong bg-surface hover:border-accent hover:bg-surface-2"
+            ? "border-accent bg-accent-soft"
+            : "border-hairline-strong hover:border-accent-ring"
         } ${busy ? "cursor-wait" : "cursor-pointer"}`}
       >
         {busy ? (
@@ -89,15 +91,26 @@ export default function UploadZone({
               {Math.round(fraction * 100)}%
             </span>
           </span>
-        ) : (
+        ) : compact ? (
           <span className="flex items-center gap-1.5 text-ink">
-            {compact ? (
-              <Plus size={16} aria-hidden="true" />
-            ) : (
-              <Upload size={16} aria-hidden="true" />
-            )}
+            <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
             {label}
           </span>
+        ) : (
+          <>
+            <span
+              aria-hidden="true"
+              className="well mb-4 flex size-16 items-center justify-center rounded-full text-accent"
+            >
+              <Upload size={26} strokeWidth={1.75} />
+            </span>
+            <span className="text-display font-semibold tracking-tight text-ink">
+              {label}
+            </span>
+            <span className="mt-1.5 text-body text-ink-muted">
+              Sürükle bırak veya seç. PDF, en fazla 40 MB.
+            </span>
+          </>
         )}
 
         {busy && (
@@ -107,7 +120,7 @@ export default function UploadZone({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-label={phase === "uploading" ? "Yükleniyor" : "İşleniyor"}
-            className="absolute inset-x-0 bottom-0 h-0.5 origin-left bg-accent transition-transform duration-150 ease-out"
+            className="absolute inset-x-0 bottom-0 h-1 origin-left bg-linear-to-r from-lime to-mint transition-transform duration-200 ease-fluid"
             style={{ transform: `scaleX(${fraction})` }}
           />
         )}

@@ -15,13 +15,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Datasheet Analiz",
   description:
-    "Kaynaklı, halüsinasyonsuz datasheet asistanı — her değer sayfa referansıyla.",
+    "Datasheet yükle, soru sor, iki datasheet'i karşılaştır. Her değer sayfa referansı ve alıntıyla gelir.",
 };
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f9fafa" },
-    { media: "(prefers-color-scheme: dark)", color: "#0d100e" },
+    { media: "(prefers-color-scheme: light)", color: "#e7edef" },
+    { media: "(prefers-color-scheme: dark)", color: "#092339" },
   ],
   width: "device-width",
   initialScale: 1,
@@ -47,7 +47,9 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="min-h-full bg-bg text-ink">{children}</body>
+      {/* No background utility: the mesh is painted on <body> in globals.css
+          and every surface above it is translucent. */}
+      <body className="min-h-full text-ink">{children}</body>
     </html>
   );
 }

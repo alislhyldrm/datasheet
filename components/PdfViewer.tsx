@@ -168,7 +168,9 @@ export default function PdfViewer({
                   pageRefs.current[n - 1] = element;
                 }}
                 style={{ height: pageHeight }}
-                className="overflow-hidden rounded-sm bg-surface ring-1 ring-border"
+                // Paper stays opaque: a PDF page is black ink on white, and
+                // letting the mesh through it would wreck the contrast.
+                className="overflow-hidden rounded-inner bg-paper shadow-[var(--raise)]"
               >
                 {/* Only the visible page and its neighbours hold a canvas. */}
                 {Math.abs(n - page) <= 1 && (
@@ -178,15 +180,20 @@ export default function PdfViewer({
             ))}
           </div>
         ) : (
-          <div className="flex h-full items-center justify-center">
-            <span className="font-mono text-micro text-ink-muted">
-              yükleniyor
-            </span>
+          /* Skeleton in the shape of the pages that are about to arrive, not
+             a spinner that describes nothing. */
+          <div
+            role="status"
+            aria-label="PDF yükleniyor"
+            className="mx-auto flex w-full max-w-[52ch] flex-col gap-3"
+          >
+            <span className="skeleton block aspect-[1/1.414] w-full rounded-inner" />
+            <span className="skeleton block aspect-[1/1.414] w-full rounded-inner" />
           </div>
         )}
       </div>
 
-      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border px-2 py-1.5">
+      <div className="chrome flex shrink-0 items-center justify-between gap-2 border-t border-hairline px-2 py-1.5">
         <div className="flex items-center gap-1">
           <IconButton
             label="Önceki sayfa"
@@ -196,7 +203,7 @@ export default function PdfViewer({
             <ChevronLeft size={18} strokeWidth={1.75} aria-hidden="true" />
           </IconButton>
           <span className="min-w-[7ch] text-center font-mono text-micro text-ink-muted">
-            {page} / {numPages || "–"}
+            {page} / {numPages || "-"}
           </span>
           <IconButton
             label="Sonraki sayfa"
@@ -290,7 +297,7 @@ function IconButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="flex h-11 w-11 items-center justify-center rounded-lg text-ink-muted transition-colors duration-150 ease-out hover:bg-surface hover:text-ink disabled:pointer-events-none disabled:opacity-40"
+      className="press flex size-11 items-center justify-center rounded-control text-ink-muted transition-all duration-200 ease-fluid hover:bg-card-2 hover:text-accent disabled:pointer-events-none disabled:opacity-40"
     >
       {children}
     </button>

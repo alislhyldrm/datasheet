@@ -25,7 +25,7 @@ export default function PdfPanel({
         <div
           role="group"
           aria-label="Dokümanlar"
-          className="flex shrink-0 gap-1 border-b border-border px-2 py-1.5"
+          className="chrome flex shrink-0 gap-1.5 border-b border-hairline px-2 py-2"
         >
           {docs.map((doc, i) => {
             const selected = i === activeIndex;
@@ -35,14 +35,14 @@ export default function PdfPanel({
                 type="button"
                 aria-pressed={selected}
                 onClick={() => onSelect(i)}
-                className={`flex min-h-11 min-w-0 items-center gap-1.5 rounded-md px-2.5 text-meta transition-colors duration-150 ease-out ${
+                className={`press flex min-h-11 min-w-0 items-center gap-2 rounded-control px-2.5 text-meta transition-all duration-200 ease-fluid ${
                   selected
-                    ? "bg-surface text-ink"
+                    ? "card font-medium text-ink"
                     : "text-ink-muted hover:text-ink"
                 }`}
               >
-                <span className="font-mono text-micro text-accent">
-                  [{i + 1}]
+                <span className="shrink-0 rounded-inner bg-accent-soft px-1.5 py-0.5 font-mono text-micro font-medium text-accent">
+                  {i + 1}
                 </span>
                 <span className="truncate">{doc.fileName}</span>
               </button>
