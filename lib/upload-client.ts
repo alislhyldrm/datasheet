@@ -4,8 +4,8 @@ import type { UploadedDoc } from "./types";
 // through /api/upload; larger ones detour through Vercel Blob client upload.
 const DIRECT_LIMIT = 4 * 1024 * 1024;
 // Mirrors MAX_PDF_BYTES in lib/anthropic.ts, which is server-only. Checking it
-// here turns a wasted 40MB upload into an instant, specific error.
-const MAX_BYTES = 40 * 1024 * 1024;
+// here turns a wasted 100MB upload into an instant, specific error.
+const MAX_BYTES = 100 * 1024 * 1024;
 // The blob upload is the long part; the server still has to fetch it and hand
 // it to Anthropic, so leave headroom rather than sitting at 100% while waiting.
 const BLOB_SHARE = 0.95;
@@ -24,7 +24,7 @@ export function validatePdf(file: File): string | null {
     return "Bu bir PDF değil. Datasheet'in PDF sürümünü seç.";
   }
   if (file.size > MAX_BYTES) {
-    return `PDF 40 MB sınırını aşıyor (${formatMb(file.size)}). Daha küçük bir dosya seç.`;
+    return `PDF 100 MB sınırını aşıyor (${formatMb(file.size)}). Daha küçük bir dosya seç.`;
   }
   return null;
 }
@@ -45,7 +45,7 @@ export async function uploadPdf(
   let blob;
   try {
     blob = await upload(file.name, file, {
-      access: "public",
+      access: "private",
       handleUploadUrl: "/api/blob-upload",
       contentType: "application/pdf",
       onUploadProgress: ({ percentage }) =>

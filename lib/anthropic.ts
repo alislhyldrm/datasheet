@@ -4,9 +4,11 @@ export const MODEL = "claude-opus-4-8";
 export const MAX_TOKENS = 16000;
 export const FILES_BETA = "files-api-2025-04-14";
 
-// Datasheet PDF limits (Anthropic API): 32MB request / 100MB Files API,
-// but we cap client-side well below to keep latency and cost sane.
-export const MAX_PDF_BYTES = 40 * 1024 * 1024; // 40 MB
+// The Anthropic Files API accepts up to 500 MB, and a PDF referenced by file_id
+// is capped by pages (600 on a 1M-context model), not by request size. What
+// binds first here is the upload route's own time budget: the server has to
+// pull the blob and forward it before maxDuration expires.
+export const MAX_PDF_BYTES = 100 * 1024 * 1024; // 100 MB
 
 let cached: Anthropic | null = null;
 

@@ -1,13 +1,14 @@
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit } from "@/lib/api-guard";
+import { MAX_PDF_BYTES } from "@/lib/anthropic";
 
 export const runtime = "nodejs";
 
-// Client-upload token endpoint for large PDFs (>4.5MB). Only active when a
-// Vercel Blob store is configured (BLOB_READ_WRITE_TOKEN). The browser calls
-// this to get a short-lived token, uploads the PDF directly to Blob, then
-// hands the resulting URL to /api/upload.
+// Client-upload token endpoint for large PDFs. Vercel caps a serverless
+// function's request body at ~4.5MB, so anything bigger cannot be POSTed to
+// /api/upload directly — the browser gets a short-lived token here, uploads
+// straight to the Blob store, and hands the resulting URL to /api/upload.
 export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!rateLimit(req, "blob-upload", 10)) {
     return NextResponse.json(
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       request: req,
       onBeforeGenerateToken: async () => ({
         allowedContentTypes: ["application/pdf"],
-        maximumSizeInBytes: 40 * 1024 * 1024,
+        maximumSizeInBytes: MAX_PDF_BYTES,
         addRandomSuffix: true,
       }),
       onUploadCompleted: async () => {

@@ -42,8 +42,10 @@ export function rateLimit(req: Request, scope: string, limit: number): boolean {
   return bucket.count <= limit;
 }
 
-// Client uploads land on the store's public host; anything else (internal IPs,
-// metadata endpoints, other schemes) must never reach fetch() on the server.
+// Client uploads land on the store's private host; anything else (internal IPs,
+// metadata endpoints, other schemes) must never be reachable from the server.
+const BLOB_HOST_SUFFIX = ".private.blob.vercel-storage.com";
+
 export function isAllowedBlobUrl(raw: string): boolean {
   let url: URL;
   try {
@@ -51,10 +53,7 @@ export function isAllowedBlobUrl(raw: string): boolean {
   } catch {
     return false;
   }
-  return (
-    url.protocol === "https:" &&
-    url.hostname.endsWith(".public.blob.vercel-storage.com")
-  );
+  return url.protocol === "https:" && url.hostname.endsWith(BLOB_HOST_SUFFIX);
 }
 
 // PDF files must start with "%PDF-" — rejects arbitrary content smuggled in

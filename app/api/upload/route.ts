@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { toFile } from "@anthropic-ai/sdk";
-import { del } from "@vercel/blob";
+import { del, get } from "@vercel/blob";
 import { getClient, FILES_BETA, MAX_PDF_BYTES } from "@/lib/anthropic";
 import { isAllowedBlobUrl, looksLikePdf, rateLimit } from "@/lib/api-guard";
 
@@ -45,15 +45,17 @@ export async function POST(req: NextRequest) {
       }
       stagedBlobUrl = blobUrl;
       fileName = cleanFileName(name);
-      const res = await fetch(blobUrl);
-      if (!res.ok) {
+      // The store is private, so the bytes come back over an authenticated
+      // read rather than a plain fetch of a guessable public URL.
+      const blob = await get(blobUrl, { access: "private" });
+      if (!blob || blob.statusCode !== 200) {
         await discardBlob(stagedBlobUrl);
         return NextResponse.json(
           { error: "Yüklenen dosya alınamadı" },
           { status: 400 }
         );
       }
-      buf = Buffer.from(await res.arrayBuffer());
+      buf = Buffer.from(await new Response(blob.stream).arrayBuffer());
     } else {
       const form = await req.formData();
       const file = form.get("file");

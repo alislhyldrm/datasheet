@@ -47,8 +47,18 @@ Geçme kriteri: her sayısal cevap doğru + doğru sayfa citation'ı + tuzak sor
 > soru Anthropic faturasına yazılır. Anthropic konsolunda harcama limiti tanımlı
 > tutun ve linki dar paylaşın.
 
-**4 MB üstü PDF** için: Vercel projesinde **Storage → Create Blob store** (token
-`BLOB_READ_WRITE_TOKEN` otomatik eklenir). Küçük PDF'ler bu olmadan çalışır.
+## PDF boyut sınırı
+
+Üst sınır **100 MB**. Vercel bir serverless fonksiyonun istek gövdesini ~4.5 MB
+ile sınırlar, o yüzden 4 MB'ın altındaki PDF'ler doğrudan `/api/upload`'a gider;
+büyükler tarayıcıdan private bir Vercel Blob store'una yüklenir ve sunucu blob'u
+oradan çekip Anthropic Files API'ye aktarır, sonra blob'u siler. Blob store
+yoksa 4 MB üstü yüklemeler çalışmaz.
+
+Asıl tavan Anthropic tarafında: Files API 500 MB'a kadar dosya kabul eder, ama
+PDF'ler sayfa sayısıyla sınırlıdır (1M bağlamlı modellerde 600 sayfa). 100 MB
+sınırı, upload route'unun `maxDuration` bütçesine göre seçildi — ölçümde 50 MB
+sunucuda 4.9 saniye sürüyor.
 
 ## Mimari
 
