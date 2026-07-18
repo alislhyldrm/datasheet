@@ -1,8 +1,10 @@
 import type { UploadedDoc } from "./types";
 
-// Vercel serverless request body limit is ~4.5MB. Small PDFs go straight
-// through /api/upload; larger ones detour through Vercel Blob client upload.
-const DIRECT_LIMIT = 4 * 1024 * 1024;
+// The ~4.5MB Vercel serverless body limit only exists on Vercel. Running
+// self-hosted (localhost / on-prem, no Vercel Blob), a plain Node server has
+// no such cap, so every PDF goes straight through /api/upload and the Blob
+// detour below stays dead. Set to MAX_BYTES to disable it entirely.
+const DIRECT_LIMIT = 100 * 1024 * 1024;
 // Mirrors MAX_PDF_BYTES in lib/anthropic.ts, which is server-only. Checking it
 // here turns a wasted 100MB upload into an instant, specific error.
 const MAX_BYTES = 100 * 1024 * 1024;
