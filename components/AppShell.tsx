@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PanelLeft, PanelLeftClose } from "lucide-react";
+import { PanelLeft, PanelLeftClose, Rows2, Square } from "lucide-react";
 import LogoMark from "./LogoMark";
 import ThemeToggle from "./ThemeToggle";
-import PdfPanel from "./PdfPanel";
+import PdfPanel, { type PdfLayout } from "./PdfPanel";
 import { PdfSyncContext, type CitationResult, type PageTarget } from "./pdf-sync";
 import type { Citation, UploadedDoc } from "@/lib/types";
 
@@ -35,6 +35,9 @@ export default function AppShell({
   const [override, setOverride] = useState<boolean | null>(null);
   const [wide, setWide] = useState(false);
   const [activeDoc, setActiveDoc] = useState(0);
+  // Comparing two datasheets is the reason to open a second document, so a
+  // multi-doc session starts with both on screen.
+  const [layout, setLayout] = useState<PdfLayout>("stacked");
   const [target, setTarget] = useState<PageTarget | null>(null);
   const nonce = useRef(0);
 
@@ -108,6 +111,9 @@ export default function AppShell({
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
+            {docs.length > 1 && pdfOpen && (
+              <LayoutToggle layout={layout} onChange={setLayout} />
+            )}
             {hasDocs && (
               <PanelToggle
                 open={pdfOpen}
@@ -131,6 +137,7 @@ export default function AppShell({
                 docs={docs}
                 activeIndex={activeIndex}
                 onSelect={setActiveDoc}
+                layout={layout}
                 target={target}
                 onPageCount={onPageCount}
               />
@@ -145,6 +152,44 @@ export default function AppShell({
         </div>
       </div>
     </PdfSyncContext>
+  );
+}
+
+function LayoutToggle({
+  layout,
+  onChange,
+}: {
+  layout: PdfLayout;
+  onChange: (layout: PdfLayout) => void;
+}) {
+  const segment = (active: boolean) =>
+    `press flex size-9 items-center justify-center rounded-inner transition-all duration-200 ease-fluid ${
+      active ? "card text-ink" : "text-ink-muted hover:text-ink"
+    }`;
+
+  return (
+    <div className="well flex shrink-0 rounded-control p-1">
+      <button
+        type="button"
+        aria-pressed={layout === "stacked"}
+        aria-label="İki dokümanı alt alta göster"
+        title="Alt alta"
+        onClick={() => onChange("stacked")}
+        className={segment(layout === "stacked")}
+      >
+        <Rows2 size={16} strokeWidth={1.75} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        aria-pressed={layout === "single"}
+        aria-label="Tek doküman göster"
+        title="Tek tek"
+        onClick={() => onChange("single")}
+        className={segment(layout === "single")}
+      >
+        <Square size={16} strokeWidth={1.75} aria-hidden="true" />
+      </button>
+    </div>
   );
 }
 

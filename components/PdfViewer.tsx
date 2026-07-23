@@ -15,14 +15,30 @@ const FLASH_MS = 200;
 
 // pdf.js touches the DOM and spawns a worker, so it must not load during SSR.
 // One worker is shared by every document in the session.
-let pdfjsPromise: Promise<typeof import("pdfjs-dist")> | null = null;
+//
+// The worker is handed to getDocument as an explicit `worker` param rather than
+// through GlobalWorkerOptions.workerPort. Both routes share one worker, but the
+// global one makes each loading task believe it OWNS that worker: closing any
+// document then calls PDFWorker.destroy(), which terminates the single shared
+// worker and breaks every other open document ("PDF açılamadı" on all of them).
+// A worker passed in explicitly is never assigned to task._worker, so document
+// lifetimes stay independent — which is what the side-by-side compare view and
+// removing one of two documents both depend on.
+let pdfjsPromise: Promise<{
+  pdfjs: typeof import("pdfjs-dist");
+  worker: import("pdfjs-dist").PDFWorker;
+}> | null = null;
+
 function loadPdfjs() {
   pdfjsPromise ??= import("pdfjs-dist").then((pdfjs) => {
-    pdfjs.GlobalWorkerOptions.workerPort = new Worker(
+    const port = new Worker(
       new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url),
       { type: "module" },
     );
-    return pdfjs;
+    // create() over `new PDFWorker()`: same result for a fresh port, but its
+    // generated constructor type declares `port?: null`. Lives for the page
+    // session; nothing destroys it.
+    return { pdfjs, worker: pdfjs.PDFWorker.create({ port }) };
   });
   return pdfjsPromise;
 }
@@ -31,10 +47,14 @@ export default function PdfViewer({
   doc,
   target,
   onPageCount,
+  labelIndex,
 }: {
   doc: UploadedDoc;
   target: PageTarget | null;
   onPageCount: (fileId: string, pageCount: number) => void;
+  // Set when several documents share the panel: the name rides along in this
+  // viewer's toolbar instead of costing a row of its own.
+  labelIndex?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
@@ -56,9 +76,9 @@ export default function PdfViewer({
 
     (async () => {
       try {
-        const pdfjs = await loadPdfjs();
+        const { pdfjs, worker } = await loadPdfjs();
         if (cancelled) return;
-        task = pdfjs.getDocument({ url: objectUrl });
+        task = pdfjs.getDocument({ url: objectUrl, worker });
         const loaded = await task.promise;
         if (cancelled) return;
         // Page 1 sizes every placeholder. Datasheets are uniform; a mixed-size
@@ -147,6 +167,63 @@ export default function PdfViewer({
 
   return (
     <>
+      {/* One thin strip above the pages: name, paging and zoom share it, so a
+          stacked pair of documents spends ~40px on chrome instead of ~180. */}
+      <div className="chrome flex shrink-0 items-center gap-1 border-b border-hairline px-1.5 py-1">
+        {labelIndex != null && (
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 pl-0.5">
+            <span className="shrink-0 rounded-inner bg-accent-soft px-1.5 py-0.5 font-mono text-micro font-medium text-accent">
+              {labelIndex + 1}
+            </span>
+            <span className="truncate text-micro text-ink-muted">
+              {doc.fileName}
+            </span>
+          </div>
+        )}
+
+        <div
+          className={`flex items-center ${labelIndex != null ? "shrink-0" : "flex-1"}`}
+        >
+          <IconButton
+            label="Önceki sayfa"
+            disabled={page <= 1}
+            onClick={() => scrollToPage(page - 1)}
+          >
+            <ChevronLeft size={16} strokeWidth={1.75} aria-hidden="true" />
+          </IconButton>
+          <span className="min-w-[6ch] text-center font-mono text-micro text-ink-muted tabular-nums">
+            {page}/{numPages || "-"}
+          </span>
+          <IconButton
+            label="Sonraki sayfa"
+            disabled={!numPages || page >= numPages}
+            onClick={() => scrollToPage(page + 1)}
+          >
+            <ChevronRight size={16} strokeWidth={1.75} aria-hidden="true" />
+          </IconButton>
+        </div>
+
+        <div className="flex shrink-0 items-center">
+          <IconButton
+            label="Uzaklaştır"
+            disabled={zoom <= ZOOM_MIN}
+            onClick={() => setZoom((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP))}
+          >
+            <Minus size={16} strokeWidth={1.75} aria-hidden="true" />
+          </IconButton>
+          <span className="min-w-[4ch] text-center font-mono text-micro text-ink-muted tabular-nums">
+            {Math.round(zoom * 100)}
+          </span>
+          <IconButton
+            label="Yakınlaştır"
+            disabled={zoom >= ZOOM_MAX}
+            onClick={() => setZoom((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP))}
+          >
+            <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
+          </IconButton>
+        </div>
+      </div>
+
       <div
         ref={scrollRef}
         onScroll={(event) => {
@@ -193,47 +270,6 @@ export default function PdfViewer({
         )}
       </div>
 
-      <div className="chrome flex shrink-0 items-center justify-between gap-2 border-t border-hairline px-2 py-1.5">
-        <div className="flex items-center gap-1">
-          <IconButton
-            label="Önceki sayfa"
-            disabled={page <= 1}
-            onClick={() => scrollToPage(page - 1)}
-          >
-            <ChevronLeft size={18} strokeWidth={1.75} aria-hidden="true" />
-          </IconButton>
-          <span className="min-w-[7ch] text-center font-mono text-micro text-ink-muted">
-            {page} / {numPages || "-"}
-          </span>
-          <IconButton
-            label="Sonraki sayfa"
-            disabled={!numPages || page >= numPages}
-            onClick={() => scrollToPage(page + 1)}
-          >
-            <ChevronRight size={18} strokeWidth={1.75} aria-hidden="true" />
-          </IconButton>
-        </div>
-
-        <div className="flex items-center gap-1">
-          <IconButton
-            label="Uzaklaştır"
-            disabled={zoom <= ZOOM_MIN}
-            onClick={() => setZoom((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP))}
-          >
-            <Minus size={18} strokeWidth={1.75} aria-hidden="true" />
-          </IconButton>
-          <span className="min-w-[5ch] text-center font-mono text-micro text-ink-muted">
-            {Math.round(zoom * 100)}%
-          </span>
-          <IconButton
-            label="Yakınlaştır"
-            disabled={zoom >= ZOOM_MAX}
-            onClick={() => setZoom((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP))}
-          >
-            <Plus size={18} strokeWidth={1.75} aria-hidden="true" />
-          </IconButton>
-        </div>
-      </div>
     </>
   );
 }
@@ -297,7 +333,8 @@ function IconButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="press flex size-11 items-center justify-center rounded-control text-ink-muted transition-all duration-200 ease-fluid hover:bg-card-2 hover:text-accent disabled:pointer-events-none disabled:opacity-40"
+      title={label}
+      className="press flex size-8 items-center justify-center rounded-inner text-ink-muted transition-all duration-200 ease-fluid hover:bg-card-2 hover:text-accent disabled:pointer-events-none disabled:opacity-40"
     >
       {children}
     </button>
