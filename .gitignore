@@ -44,6 +44,3 @@ next-env.d.ts
 # test artifacts
 scripts/testdata/ne555_text.txt
 scripts/test-result.md
-
-# Local Node.js runtime distribution, not project source
-/node/
