@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { getClient, MODEL, MAX_TOKENS, FILES_BETA } from "@/lib/anthropic";
+import { getClient, MODEL, MAX_TOKENS, EFFORT, FILES_BETA } from "@/lib/anthropic";
 import { SYSTEM_PROMPT } from "@/lib/prompts";
 import { rateLimit } from "@/lib/api-guard";
 import type { HistoryTurn } from "@/lib/types";
@@ -129,6 +129,7 @@ export async function POST(req: NextRequest) {
           model: MODEL,
           max_tokens: MAX_TOKENS,
           thinking: { type: "adaptive" },
+          output_config: { effort: EFFORT },
           system: SYSTEM_PROMPT,
           messages,
           betas: [FILES_BETA],

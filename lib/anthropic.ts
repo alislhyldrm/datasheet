@@ -1,7 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-export const MODEL = "claude-opus-4-8";
-export const MAX_TOKENS = 16000;
+export const MODEL = "claude-sonnet-5";
+// Thinking tokens come out of the same budget as the answer, and Sonnet 5's
+// tokenizer runs ~30% hotter than Opus 4.8's. The request streams, so there is
+// no HTTP timeout pushing back on a large ceiling.
+export const MAX_TOKENS = 64000;
+// `xhigh` is the recommended level for the hardest work on Sonnet 5; `max` costs
+// more and can overthink a lookup like this one.
+export const EFFORT = "xhigh" as const;
 export const FILES_BETA = "files-api-2025-04-14";
 
 // The Anthropic Files API accepts up to 500 MB, and a PDF referenced by file_id
