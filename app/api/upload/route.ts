@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     if (buf.length > MAX_PDF_BYTES) {
       await discardBlob(stagedBlobUrl);
       return NextResponse.json(
-        { error: "PDF çok büyük (max 40 MB)" },
+        { error: `PDF çok büyük (max ${MAX_PDF_BYTES / (1024 * 1024)} MB)` },
         { status: 413 }
       );
     }

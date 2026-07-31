@@ -8,6 +8,10 @@ const DIRECT_LIMIT = 4 * 1024 * 1024;
 // Mirrors MAX_PDF_BYTES in lib/anthropic.ts, which is server-only. Checking it
 // here turns a wasted 100MB upload into an instant, specific error.
 const MAX_BYTES = 100 * 1024 * 1024;
+
+/** Both limits as user-facing labels, so no copy can quote a stale number. */
+export const MAX_LABEL = `${MAX_BYTES / (1024 * 1024)} MB`;
+const DIRECT_LABEL = `${DIRECT_LIMIT / (1024 * 1024)} MB`;
 // The blob upload is the long part; the server still has to fetch it and hand
 // it to Anthropic, so leave headroom rather than sitting at 100% while waiting.
 const BLOB_SHARE = 0.95;
@@ -26,7 +30,7 @@ export function validatePdf(file: File): string | null {
     return "Bu bir PDF değil. Datasheet'in PDF sürümünü seç.";
   }
   if (file.size > MAX_BYTES) {
-    return `PDF 100 MB sınırını aşıyor (${formatMb(file.size)}). Daha küçük bir dosya seç.`;
+    return `PDF ${MAX_LABEL} sınırını aşıyor (${formatMb(file.size)}). Daha küçük bir dosya seç.`;
   }
   return null;
 }
@@ -55,7 +59,7 @@ export async function uploadPdf(
     });
   } catch {
     throw new Error(
-      "Büyük dosya yükleme yapılandırılmamış (Vercel Blob gerekli). 4 MB altı PDF deneyin.",
+      `Büyük dosya yükleme yapılandırılmamış (Vercel Blob gerekli). ${DIRECT_LABEL} altı PDF deneyin.`,
     );
   }
 

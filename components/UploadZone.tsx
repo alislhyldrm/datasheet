@@ -2,7 +2,12 @@
 
 import { useRef, useState } from "react";
 import { Plus, Upload } from "lucide-react";
-import { uploadPdf, validatePdf, type UploadPhase } from "@/lib/upload-client";
+import {
+  MAX_LABEL,
+  uploadPdf,
+  validatePdf,
+  type UploadPhase,
+} from "@/lib/upload-client";
 import type { UploadedDoc } from "@/lib/types";
 
 export default function UploadZone({
@@ -108,7 +113,7 @@ export default function UploadZone({
               {label}
             </span>
             <span className="mt-1.5 text-body text-ink-muted">
-              Sürükle bırak veya seç. PDF, en fazla 40 MB.
+              Sürükle bırak veya seç. PDF, en fazla {MAX_LABEL}.
             </span>
           </>
         )}
