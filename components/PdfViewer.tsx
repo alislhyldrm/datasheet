@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
 import type { PageTarget } from "./pdf-sync";
+import { locateCitation, type MarkRect, type TextChunk } from "@/lib/pdf-highlight";
 import type { UploadedDoc } from "@/lib/types";
 
 const PAGE_GAP = 12;
@@ -12,6 +13,33 @@ const ZOOM_STEP = 0.2;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 3;
 const FLASH_MS = 200;
+// How far past the citation's first page to keep looking for its text. A
+// page_location can span a page break; anything beyond a page or two of it is
+// a mismatch, not a continuation.
+const SEARCH_AHEAD = 2;
+// Where the highlight lands in the viewport: a third down, so the lines above
+// it stay visible as context.
+const SCROLL_LEAD = 3;
+// A citation covering more than this much of the page's height is a table or a
+// whole section, not a sentence. Measured on the NE555 datasheet: answers about
+// a spec row cite the entire "Electrical Characteristics" block, ~90% of the
+// page. Drawn at full strength that reads as "everything matters"; drawn faint
+// it reads as "the source is this region", which is what it is.
+const BROAD_SPREAD = 0.4;
+
+// One page's text, as the highlighter needs it. Cached per page: re-clicking
+// the same citation must not go back to the worker.
+interface PageText {
+  chunks: TextChunk[];
+  viewportMatrix: number[];
+}
+
+interface Mark {
+  page: number;
+  rects: MarkRect[];
+  // A block-sized citation, drawn faint — see BROAD_SPREAD.
+  broad: boolean;
+}
 
 // pdf.js touches the DOM and spawns a worker, so it must not load during SSR.
 // One worker is shared by every document in the session.
@@ -63,13 +91,19 @@ export default function PdfViewer({
   const [zoom, setZoom] = useState(1);
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [mark, setMark] = useState<Mark | null>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const textCache = useRef(new Map<number, PageText>());
 
   const objectUrl = doc.objectUrl;
 
   useEffect(() => {
     if (!objectUrl) return;
     let cancelled = false;
+    // Keyed by page number, so it only ever describes the document being
+    // loaded here. Both panel layouts key the viewer by fileId, so a new
+    // document arrives as a fresh mount rather than a swap under this effect.
+    textCache.current.clear();
     // Tearing down the loading task is what releases the document and its
     // worker port; PDFDocumentProxy itself has no destroy in pdf.js 6.
     let task: PDFDocumentLoadingTask | null = null;
@@ -119,44 +153,136 @@ export default function PdfViewer({
   const stride = pageHeight + PAGE_GAP;
   const numPages = pdf?.numPages ?? 0;
 
-  const scrollToPage = (next: number) => {
+  const scrollTo = (top: number) => {
     const element = scrollRef.current;
-    if (!element || !stride) return;
+    if (!element) return;
     const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)")
       .matches;
     element.scrollTo({
-      top: (next - 1) * stride,
+      top: Math.max(top, 0),
       behavior: smooth ? "smooth" : "auto",
     });
   };
 
-  // A citation was clicked. The scroll is the state update: `page` follows
-  // from onScroll, and the flash is a transient outline on the DOM node, so
-  // neither belongs in React state.
+  const scrollToPage = (next: number) => {
+    if (!stride) return;
+    scrollTo((next - 1) * stride);
+  };
+
+  // A citation was clicked: find its sentence, scroll to it, and leave the
+  // highlight standing until the next citation (or Escape) clears it.
   //
   // `stride` is a dependency because a click can land before the document has
   // loaded, but each nonce must fire exactly once — otherwise zooming (which
-  // changes stride) would yank the reader back to the last cited page.
+  // changes stride) would yank the reader back to the last cited page. The
+  // rects are stored in PDF units for the same reason: zoom rescales them
+  // instead of re-running the search.
   const targetNonce = target?.nonce;
   const targetPage = target?.page;
+  const targetEndPage = target?.endPage;
+  const targetText = target?.citedText;
   const handledNonce = useRef(0);
   useEffect(() => {
     if (targetNonce == null || targetNonce === handledNonce.current) return;
     if (targetPage == null || !containerWidth || !stride || !numPages) return;
-    handledNonce.current = targetNonce;
+    if (!pdf) return;
 
-    const next = Math.min(Math.max(targetPage, 1), numPages);
-    scrollToPage(next);
-    const element = pageRefs.current[next - 1];
-    element?.classList.add("pdf-flash");
-    const timer = setTimeout(
-      () => element?.classList.remove("pdf-flash"),
-      FLASH_MS * 3,
+    const first = Math.min(Math.max(targetPage, 1), numPages);
+    const last = Math.min(
+      Math.max(targetEndPage ?? first, first),
+      first + SEARCH_AHEAD,
+      numPages,
     );
-    return () => clearTimeout(timer);
-    // scrollToPage is derived from stride, which is already a dependency.
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const readPage = async (n: number): Promise<PageText> => {
+      const cached = textCache.current.get(n);
+      if (cached) return cached;
+      const loaded = await pdf.getPage(n);
+      const content = await loaded.getTextContent();
+      const value: PageText = {
+        // TextMarkedContent items carry no glyphs; only runs of text can be
+        // located on the page.
+        chunks: content.items.flatMap((item) => ("str" in item ? [item] : [])),
+        viewportMatrix: loaded.getViewport({ scale: 1 }).transform,
+      };
+      textCache.current.set(n, value);
+      return value;
+    };
+
+    void (async () => {
+      let found: Mark | null = null;
+      for (let n = first; n <= last && !found; n++) {
+        let text: PageText;
+        try {
+          text = await readPage(n);
+        } catch {
+          // A page whose text won't extract is a miss, not a failure: the
+          // fallback below still gets the reader to the right page.
+          continue;
+        }
+        if (cancelled) return;
+        const rects = locateCitation({ ...text, citedText: targetText ?? "" });
+        if (!rects.length) continue;
+        // Rects come back sorted top-down, so the first one's top is the
+        // highest; the bottom needs a look at all of them.
+        const bottom = Math.max(...rects.map((r) => r.y + r.height));
+        const spread = (bottom - rects[0].y) / (baseSize?.height || bottom);
+        found = { page: n, rects, broad: spread > BROAD_SPREAD };
+      }
+      if (cancelled) return;
+
+      // Claimed here rather than up front: a zoom while the search is still
+      // running cancels it, and the re-run has to be allowed to finish the
+      // job. Once a nonce has landed, later zooms leave the reader alone.
+      handledNonce.current = targetNonce;
+      setMark(found);
+      if (!found) {
+        scrollToPage(first);
+        const element = pageRefs.current[first - 1];
+        element?.classList.add("pdf-flash");
+        timer = setTimeout(
+          () => element?.classList.remove("pdf-flash"),
+          FLASH_MS * 3,
+        );
+        return;
+      }
+
+      const lead = (scrollRef.current?.clientHeight ?? 0) / SCROLL_LEAD;
+      scrollTo((found.page - 1) * stride + found.rects[0].y * scale - lead);
+    })();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // scrollTo/scrollToPage are derived from stride and scale, both listed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetNonce, targetPage, containerWidth, stride, numPages]);
+  }, [
+    targetNonce,
+    targetPage,
+    targetEndPage,
+    targetText,
+    containerWidth,
+    stride,
+    scale,
+    baseSize,
+    numPages,
+    pdf,
+  ]);
+
+  // Escape clears the highlight — the one way out that doesn't require
+  // finding another citation to click.
+  useEffect(() => {
+    if (!mark) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMark(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mark]);
 
   if (!objectUrl) {
     return (
@@ -247,12 +373,29 @@ export default function PdfViewer({
                 style={{ height: pageHeight }}
                 // Paper stays opaque: a PDF page is black ink on white, and
                 // letting the mesh through it would wreck the contrast.
-                className="overflow-hidden rounded-inner bg-paper shadow-[var(--raise)]"
+                className="relative overflow-hidden rounded-inner bg-paper shadow-[var(--raise)]"
               >
                 {/* Only the visible page and its neighbours hold a canvas. */}
                 {Math.abs(n - page) <= 1 && (
                   <PageCanvas pdf={pdf} pageNumber={n} scale={scale} />
                 )}
+
+                {/* Rects are in PDF units; the current scale places them over
+                    the canvas without another pass over the page text. */}
+                {mark?.page === n &&
+                  mark.rects.map((rect, i) => (
+                    <span
+                      key={i}
+                      aria-hidden="true"
+                      className={`pdf-mark${mark.broad ? " pdf-mark-broad" : ""}`}
+                      style={{
+                        left: rect.x * scale,
+                        top: rect.y * scale,
+                        width: rect.width * scale,
+                        height: rect.height * scale,
+                      }}
+                    />
+                  ))}
               </div>
             ))}
           </div>

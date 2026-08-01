@@ -60,6 +60,8 @@ export default function AppShell({
         setTarget({
           documentIndex: index,
           page: citation.startPage,
+          endPage: citation.endPage,
+          citedText: citation.citedText,
           nonce: nonce.current,
         });
       }

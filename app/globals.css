@@ -363,10 +363,32 @@
   }
 }
 
-/* Transient marker on the page a citation just jumped to. */
+/* Fallback marker: shown only when the cited sentence could not be located,
+   so the reader still lands on the right page. */
 .pdf-flash {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+}
+
+/* The cited sentence itself. Multiply over the page keeps the black ink at
+   full contrast — a solid tint would grey the text it is pointing at. Paper
+   is white in both themes, so one rule covers both. */
+.pdf-mark {
+  /* Calibrated against a rendered page: below ~0.3 the tint disappears into
+     the table rules; multiply keeps the ink black well past this. */
+  --mark-opacity: 0.48;
+  position: absolute;
+  border-radius: 2px;
+  background-color: var(--accent);
+  opacity: var(--mark-opacity);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+/* A citation that covers most of the page is a table, not a sentence. Faint
+   enough to read as a region rather than an instruction to read all of it. */
+.pdf-mark-broad {
+  --mark-opacity: 0.22;
 }
 
 /* Skeletons match the shape of what is loading. No spinners anywhere. */
@@ -394,6 +416,12 @@
     animation: msg-enter 220ms var(--ease-fluid) both;
   }
 
+  /* The highlight lands while the page is still scrolling toward it; the
+     pulse is what makes it findable at the end of the scroll. */
+  .pdf-mark {
+    animation: pdf-mark-in 420ms var(--ease-fluid) both;
+  }
+
   /* Only below lg, where the panel is closed by default and can therefore
      only appear because the reader asked for it. At lg it is open on load,
      and animating that would be page-load choreography. */
@@ -401,6 +429,19 @@
     .panel-enter {
       animation: panel-enter 220ms var(--ease-fluid) both;
     }
+  }
+}
+
+/* Overshoots its resting opacity, whichever one the mark is carrying. */
+@keyframes pdf-mark-in {
+  from {
+    opacity: 0;
+  }
+  55% {
+    opacity: calc(var(--mark-opacity) * 1.35);
+  }
+  to {
+    opacity: var(--mark-opacity);
   }
 }
 
