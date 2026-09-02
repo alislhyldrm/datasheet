@@ -4,6 +4,13 @@ Test datasheet: `scripts/testdata/ne555.pdf` (TI xx555 Precision Timers, 39 sayf
 Cevap anahtarı PDF'ten (pypdf ile) doğrulanarak çıkarıldı. Sayfa no'ları PDF içi
 gerçek sayfalar (1-indexed).
 
+Cevap anahtarı sağlayıcıdan bağımsızdır (aynı PDF, aynı değerler). Sayfa
+citation'ı Anthropic'in native Citations API'siyle doğrulanmıştır. OpenAI ve
+Gemini'de sayfa/alıntı prompt sözleşmesiyle gelir ve tarayıcıda PDF metnine
+karşı doğrulanır; `run-test.mjs` tarayıcı çalıştırmadığı için bu sağlayıcılarda
+sayfa kontrolü "citation üretildi mi" seviyesine iner. Sağlayıcı seçimi:
+`PROVIDER=openai MODEL=... LLM_API_KEY=... npm test`.
+
 ## Geçme kriteri
 - Beklenen değerler cevapta doğru (birim + koşul + min/typ/max dahil)
 - Her sayısal cevapta doğru sayfaya işaret eden en az bir citation

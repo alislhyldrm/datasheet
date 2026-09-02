@@ -1,96 +1,235 @@
 # Datasheet Analiz
 
-Elektronik mühendisleri için kaynaklı, halüsinasyonsuz datasheet asistanı. PDF
-datasheet yükle, sor; her cevap **datasheet içindeki sayfa + birebir alıntı** ile
-gelir. Dokümanda olmayan bilgi uydurulmaz.
+Datasheet PDF'ini yükle, soru sor; **her değer sayfa numarası ve PDF'ten
+birebir alıntıyla** gelsin. Model uydurmaz: bilgi dokümanda yoksa cevap
+"datasheet'te yok" der.
 
-- **Model:** Claude Opus 4.8 (native PDF: tablolar + grafikler görsel olarak okunur)
-- **Citations API** ile her iddia sayfa referanslı — RAG yok, chunk hatası yok
-- İki datasheet'i yan yana karşılaştırma
-- Prompt caching: ilk sorudan sonra aynı datasheet ~%90 daha ucuz
-- Mobil öncelikli, koyu tema
+Kendi bilgisayarında çalışır, kendi API anahtarını kullanır.
+**Anthropic (Claude), OpenAI veya Google Gemini** — hangisini istersen.
 
-## Kurulum (lokal)
+## Ne işe yarar
+
+Bir komponentin 200 sayfalık datasheet'inde "V_IH kaç volt", "3.3 V lojikle
+uyumlu mu", "absolute maximum ile recommended operating farkı ne" diye
+aranırken kaybolmamak için. Uygulama:
+
+- **Tüm PDF'i modele verir** — RAG yok, chunk seçimi yok. Tablolar, şekiller,
+  dipnotlar dahil doküman bütün olarak okunur.
+- **Her cevabı kaynaklandırır** — cevabın altındaki kaynak rozetine tıklayınca
+  PDF o sayfaya gider ve alıntılanan cümle sayfada işaretlenir.
+- **İki datasheet'i karşılaştırır** — aynı soruyu iki dokümana birden sorup
+  yanıtları yan yana koyabilirsin.
+- **Mühendis gibi cevap verir** — sistem promptu birimleri ve test koşullarını,
+  min/typ/max kolonunu, varyant/revizyon farkını ve "absolute max ≠ recommended
+  operating" ayrımını zorunlu tutar.
+- **İstediğin modeli kullanır** — sağlayıcıyı ve model kimliğini panelden sen
+  yazarsın; kapalı bir model listesi yok. Seçim varsayılan olarak saklanır,
+  değiştirdiğinde yenisi varsayılan olur.
+- **Anahtarını dışarı çıkarmaz** — anahtar tarayıcının localStorage'ında ya da
+  sunucudaki `.env.local` dosyasında durur; sadece kendi localhost sunucuna,
+  oradan da seçtiğin sağlayıcıya gider. Ne veritabanı ne bulut depolama var.
+
+Soru dili cevabın dilini belirler: Türkçe sorarsan Türkçe, İngilizce sorarsan
+İngilizce cevap gelir.
+
+## Gereksinimler
+
+- **Node.js 20.9 veya üstü** (Next.js 16 şartı) — [nodejs.org](https://nodejs.org)
+- Bir sağlayıcı API anahtarı:
+  [Anthropic](https://console.anthropic.com) ·
+  [OpenAI](https://platform.openai.com/api-keys) ·
+  [Google AI Studio](https://aistudio.google.com/apikey)
+
+Anahtar kendi hesabındandır; her soru kendi kotandan token harcar.
+
+## Kurulum
 
 ```bash
+git clone https://github.com/alislhyldrm/datasheet.git
+cd datasheet
 npm install
-cp .env.example .env.local     # ANTHROPIC_API_KEY'i gir
-npm run dev                     # http://localhost:3000
+npm run dev
 ```
 
-`.env.local` içine Anthropic API anahtarını yaz:
+Tarayıcıda **http://localhost:3000** açılır. Git kullanmak istemiyorsan
+GitHub'da **Code → Download ZIP** ile indirip klasörü açtıktan sonra aynı
+`npm install && npm run dev` adımlarını uygula.
 
-```
-ANTHROPIC_API_KEY=sk-ant-...
+Yapılandırma dosyası düzenlemek, hesap açmak, deploy etmek gerekmez.
+
+## Kullanım
+
+1. **Modelini seç.** Sağ üstteki dişli ikonu → sağlayıcı, model kimliği ve API
+   anahtarı. Model alanı serbest metindir: anahtarının eriştiği **hangi model
+   olursa olsun** yazabilirsin, kapalı bir liste yok. Kaydettiğin an bu seçim
+   varsayılanın olur ve öyle kalır; dilediğin zaman paneli açıp değiştirirsin,
+   yeni seçim yeni varsayılandır. Anahtar `.env.local` dosyasındaysa anahtar
+   alanını boş bırakabilirsin.
+2. **PDF yükle.** Datasheet'i sürükle-bırak ya da alandan seç. Dosya
+   sağlayıcının Files API'sine yüklenir, geriye sadece opak bir dosya kimliği
+   döner.
+3. **Sor.** Alttaki kutuya yaz ya da hazır sorulardan birine tıkla: "Absolute
+   maximum ratings nedir?", "Besleme gerilimi aralığı (min/typ/max)?", "3.3V
+   lojik ile uyumlu mu?", "Pinout / bacak bağlantıları?"…
+4. **Kaynağı doğrula.** Cevaptaki kaynak rozetine tıkla: PDF paneli ilgili
+   sayfayı açar ve alıntılanan cümleyi vurgular. Geniş ekranda PDF sohbetin
+   yanında durur, dar ekranda üstteki PDF ikonuyla açılıp kapanır.
+5. **Karşılaştır.** İkinci bir datasheet yükle; PDF panelindeki alt alta / tek
+   tek düğmesiyle iki dokümanı birlikte gör, tek soruda ikisini de sorgula.
+
+Tema (açık/koyu) üstteki düğmeden değişir ve tarayıcıda hatırlanır.
+
+### Anahtarı tarayıcıya hiç girmemek: `.env.local`
+
+Ayarlar panelini hiç açmak istemiyorsan anahtarı dosyaya yaz. Uygulama açılışta
+sunucuya "senin anahtarın var mı?" diye sorar; varsa doğrudan yükleme ekranıyla
+açılır, anahtar tarayıcıya hiç inmez. Yapman gereken:
+
+```bash
+cp .env.example .env.local
 ```
 
-Uygulamanın önünde HTTP Basic auth var. `APP_PASSWORD` boşsa geliştirmede kapı
-açılmaz (yerel çalışma sürtünmesiz kalsın diye), ama production'da sunucu hiçbir
-isteği karşılamaz — açık deploy etmek imkânsız. Yerelde kapıyı denemek için:
+sonra **kullanacağın sağlayıcının anahtar satırını doldurmak**. Doldurulacak tek
+yer bu; sağlayıcıyı ayrıca yazmana gerek yok, hangi satırı doldurduğundan
+anlaşılıyor. Birden fazla satırı doldurabilirsin: o zaman panelden hangisine
+geçersen geç, anahtar hazırdır.
 
-```
-APP_PASSWORD=<paylaşılan-şifre>
+| Kullandığın sağlayıcı | Dolduracağın satır | Anahtarı nereden alırsın |
+|-----------------------|--------------------|--------------------------|
+| Anthropic (Claude) | `ANTHROPIC_API_KEY=` | https://console.anthropic.com |
+| OpenAI | `OPENAI_API_KEY=` | https://platform.openai.com/api-keys |
+| Google Gemini | `GEMINI_API_KEY=` | https://aistudio.google.com/apikey |
+
+Örnek — Gemini kullanan bir `.env.local` bu kadar:
+
+```ini
+GEMINI_API_KEY=AIza...
 ```
 
-Kullanıcı adı önemsiz; yalnızca şifre doğrulanır.
+Dosyadaki diğer iki satır isteğe bağlı, boş kalabilir:
+
+```ini
+# Sadece yukarıda birden fazla anahtar doluysa gerekir: hangisi kullanılsın?
+LLM_PROVIDER=      # anthropic | openai | gemini
+# Model kimliği. Boş = sağlayıcının varsayılan modeli.
+LLM_MODEL=
+```
+
+Değerleri tırnak içine alma, satır sonuna boşluk bırakma. `.env.local`
+`.gitignore`'da olduğu için anahtarın repoya gitmez. Dosyayı değiştirdikten
+sonra dev sunucusunu yeniden başlat.
+
+Birden fazla anahtarı doldurup `LLM_PROVIDER` yazmazsan uygulama hangisini
+kastettiğini bilemez ve bunu açıkça söyler; o durumda `LLM_PROVIDER` satırını
+doldur.
+
+### Model seçimi ile anahtar ayrı şeyler
+
+**Hangi model çalışacak** sorusunun cevabı panelden gelir, **anahtarı kim
+veriyor** sorusununki tarayıcıdan ya da sunucudan:
+
+- Paneli bir kez kaydettikten sonra seçtiğin sağlayıcı ve model, o tarayıcının
+  varsayılanıdır. Sekmeyi, sunucuyu, bilgisayarı kapatsan da kalır; paneli
+  açıp değiştirdiğinde yeni seçim varsayılan olur. Başka tarayıcıda, başka
+  profilde veya gizli sekmede yeniden seçersin.
+- Anahtar alanını doldurursan istek o anahtarla gider; boş bırakırsan sunucu
+  `.env.local` içinde o sağlayıcı için tanımlı anahtarı kullanır ve anahtar
+  tarayıcıya hiç inmez. Panel bunu ayrıca belirtmez — sessizce çalışır.
+- Seçtiğin sağlayıcının anahtarı ne panelde ne sunucudaysa uygulama bunu soru
+  sorduğunda söyler.
+
+Yani `.env.local` yalnızca bir anahtar deposudur; hangi modeli kullanacağını hep
+panelden değiştirebilirsin. Panel hiç açılmadıysa `.env.local`'daki sağlayıcı ve
+`LLM_MODEL` (ya da o sağlayıcının varsayılan modeli) kullanılır.
+
+### Model isimleri hakkında
+
+Model alanı serbesttir: anahtarının çözebildiği herhangi bir kimlik çalışır.
+Panelde birkaç öneri düşer ama liste kapalı değil, elle yazdığın kimlik
+kullanılır.
+
+Boş bırakırsan varsayılanlar devreye girer: Anthropic `claude-sonnet-5`, OpenAI
+`gpt-5.1`, Gemini `gemini-pro-latest`. Google tarihli Gemini kimliklerini yeni
+anahtarlara hızla kapatıyor (bütün `gemini-2.x` hattı gitti), o yüzden Gemini
+tarafında dönen alias kullanılıyor. Bir kimlik çözülmezse panele güncel bir
+kimlik yazman yeterli.
+
+## Kaynak gösterimi sağlayıcıya göre değişir
+
+| Sağlayıcı | PDF girişi | Alıntı |
+|-----------|------------|--------|
+| Anthropic | Files API | **yapısal** — sayfa + birebir alıntı doğrudan Citations API'den gelir |
+| OpenAI | `input_file` | model her cümleden sonra `[[cite:page=N\|alıntı]]` işareti üretir; tarayıcı alıntıyı gerçek PDF metniyle karşılaştırıp sayfayı düzeltir ya da düşürür |
+| Gemini | doküman girişi | OpenAI ile aynı prompt sözleşmesi + tarayıcı doğrulaması |
+
+OpenAI ve Gemini'de alıntı PDF metninde bulunamazsa kaynak **sayfasız** (sadece
+"kaynak", dosya seviyesinde) gösterilir. Uydurma sayfa numarası üretilmez —
+bulunamamış olması dürüst sonuçtur. API tarafından doğrulanmış sayfa numarasını
+yalnızca Anthropic verir.
+
+## Sınırlar
+
+- **PDF başına 100 MB.** Dosya tek istekte belleğe alınıp sağlayıcıya
+  aktarıldığı için uygulamanın kendi sınırı bu; sağlayıcı tavanları farklı
+  (Anthropic 500 MB, OpenAI 512 MB, Gemini 50 MB / 1000 sayfa). Gerçek
+  datasheet'ler birkaç MB.
+- Arayüzde aynı anda **2 datasheet** (karşılaştırma için); API'nin kendi tavanı
+  istek başına 5 dosya. Soru başına 4000 karakter.
+- IP başına dakikada 10 yükleme / 20 sohbet isteği (bellek içi sayaç).
 
 ## Test
 
-Gerçek datasheet (NE555) ile uçtan uca kabul testi. Dev server çalışırken:
+Gerçek bir datasheet (NE555) üzerinde uçtan uca kabul testi:
 
 ```bash
-npm run dev            # ayrı terminalde
-npm test               # scripts/run-test.mjs — upload + 14 soru + citation kontrolü
+npm run dev                                   # ayrı terminalde
+npm test                                      # .env.local'daki sağlayıcıyla
+PROVIDER=gemini LLM_API_KEY=... npm test      # ya da istediğin sağlayıcıyla
 ```
 
-Geçme kriteri: her sayısal cevap doğru + doğru sayfa citation'ı + tuzak soruda
-"datasheet'te yok". Detay: `scripts/test-qa.md`.
+`npm test` gerçek sağlayıcıya gider ve token harcar. Doğrulanmış cevap anahtarı
+Anthropic ile hazırlandı; diğer sağlayıcılarda sayfa doğrulaması tarayıcıda
+çalıştığı için iddia "bir kaynak üretildi"ye gevşer. Ayrıntı:
+`scripts/test-qa.md`.
 
-## Deploy (GitHub → Vercel)
+Diğer komutlar:
 
-1. Repo'yu GitHub'a push et.
-2. [vercel.com](https://vercel.com) → **Add New → Project → Import** (GitHub repo).
-3. **Environment Variables**: `ANTHROPIC_API_KEY` ve `APP_PASSWORD` ekle.
-   `APP_PASSWORD` eksikse deploy açılır ama her istek 500 döner.
-4. Deploy. Prod link telefondan kullanılabilir; ilk açılışta şifre sorar.
+```bash
+npm run lint      # eslint — temiz geçmeli
+npm run build     # üretim derlemesi
+npm start         # derlenmiş sürümü çalıştır
+```
 
-**4 MB üstü PDF** için: Vercel projesinde **Storage → Create Blob store**
-(private) — token `BLOB_READ_WRITE_TOKEN` otomatik eklenir. Küçük PDF'ler bu
-olmadan da çalışır.
+## Başkalarına açacaksan
 
-> Şifre paylaşılan tek bir sır: onu bilen herkes soru sorabilir ve her soru
-> Anthropic faturasına yazılır. Anthropic konsolunda harcama limiti tanımlı
-> tutun.
-
-## PDF boyut sınırı
-
-Üst sınır **100 MB**. Vercel bir serverless fonksiyonun istek gövdesini ~4.5 MB
-ile sınırlar, o yüzden 4 MB'ın altındaki PDF'ler doğrudan `/api/upload`'a gider;
-büyükler tarayıcıdan private bir Vercel Blob store'una yüklenir ve sunucu blob'u
-oradan çekip Anthropic Files API'ye aktarır, sonra blob'u siler. Blob store
-yoksa 4 MB üstü yüklemeler çalışmaz.
-
-Asıl tavan Anthropic tarafında: Files API 500 MB'a kadar dosya kabul eder, ama
-PDF'ler sayfa sayısıyla sınırlıdır (1M bağlamlı modellerde 600 sayfa). 100 MB
-sınırı, upload route'unun `maxDuration` bütçesine göre seçildi — ölçümde 50 MB
-sunucuda 4.9 saniye sürüyor.
+Uygulamada **giriş yok**; tek koruma IP başına bellek içi sayaç. `localhost`
+için doğru takas, açık bir URL için değil: adresi bulan herkes senin API
+bütçeni harcayabilir. Public'e koyacaksan önüne kendi kimlik doğrulamanı koy ve
+sağlayıcı konsolunda harcama limiti tanımla.
 
 ## Mimari
 
 ```
-Tarayıcı → /api/upload (PDF → Anthropic Files API → file_id)
-        → /api/chat  (soru + file_id → Opus 4.8 stream + citations → SSE)
+Tarayıcı ──▶ /api/upload   PDF ──▶ sağlayıcı Files API ──▶ opak dosya kimliği
+         ──▶ /api/chat     soru + dosya kimliği ──▶ model akışı
+                           ──▶ SSE (text / citation / done / error)
 ```
 
-- `lib/prompts.ts` — katı sistem promptu (birim/koşul, min/typ/max, varyant, absolute-max ayrımı)
-- `app/api/chat/route.ts` — streaming + citations + cache_control
-- `components/CitationChip.tsx` — "s.14" rozeti → alıntı popover
+```
+app/api/chat/route.ts        SSE akışı, sağlayıcıdan bağımsız
+app/api/upload/route.ts      PDF -> sağlayıcı Files API
+app/api/config/route.ts      sunucuda anahtar var mı (anahtarın kendisi değil)
+lib/llm/                     sağlayıcı adaptörleri + registry
+lib/llm/citation-contract.ts satır içi alıntı işareti ve akış ayrıştırıcısı
+lib/citations/verify.ts      alıntı -> gerçek sayfa metni doğrulaması (tarayıcı)
+lib/pdf/highlight.ts         alıntılanan cümlenin sayfadaki konumu
+lib/prompts.ts               datasheet sistem promptu
+components/                  arayüz; components/pdf/ PDF paneli ve pdf.js
+```
 
-## Erişim / maliyet
+Yeni sağlayıcı eklemek: `lib/llm/` altına bir adaptör dosyası, `ADAPTERS` ve
+`PROVIDER_META` içine birer satır. Route'lar, SSE protokolü ve arayüz değişmez.
 
-Erişim tek paylaşılan şifreyle korunuyor (`proxy.ts`, HTTP Basic auth). Kapı
-sayfaların değil her yolun önünde: `/api/*`, statik dosyalar ve `/_next/data`
-dahil. Şifreler SHA-256 özetleri üzerinden `timingSafeEqual` ile karşılaştırılır.
+## Lisans
 
-Şifreyi bilen herkes soru sorabilir ve maliyet hesap sahibine yazar; Anthropic
-konsolunda harcama limiti tanımlı tutun.
+MIT — bkz. [LICENSE](LICENSE).

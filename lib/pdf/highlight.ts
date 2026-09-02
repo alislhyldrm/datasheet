@@ -54,7 +54,9 @@ function mapChar(ch: string): string {
   return ch.normalize("NFKC").toLowerCase();
 }
 
-function compact(text: string): string {
+// Exported so citation verification compacts quotes and page text exactly the
+// way the on-page matcher does — the two must agree on what "the same text" is.
+export function compact(text: string): string {
   let out = "";
   for (const ch of text) out += mapChar(ch);
   return out;

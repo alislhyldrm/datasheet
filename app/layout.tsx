@@ -16,6 +16,10 @@ export const metadata: Metadata = {
   title: "Datasheet Analiz",
   description:
     "Datasheet yükle, soru sor, iki datasheet'i karşılaştır. Her değer sayfa referansı ve alıntıyla gelir.",
+  authors: [
+    { name: "Ali Salih Yıldırım", url: "https://github.com/alislhyldrm" },
+  ],
+  creator: "Ali Salih Yıldırım",
 };
 
 export const viewport: Viewport = {

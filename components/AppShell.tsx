@@ -1,12 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PanelLeft, PanelLeftClose, Rows2, Square } from "lucide-react";
+import {
+  PanelLeft,
+  PanelLeftClose,
+  Rows2,
+  Settings2,
+  Square,
+} from "lucide-react";
 import LogoMark from "./LogoMark";
 import ThemeToggle from "./ThemeToggle";
-import PdfPanel, { type PdfLayout } from "./PdfPanel";
-import { PdfSyncContext, type CitationResult, type PageTarget } from "./pdf-sync";
-import type { Citation, UploadedDoc } from "@/lib/types";
+import SettingsDialog from "./SettingsDialog";
+import PdfPanel, { type PdfLayout } from "./pdf/PdfPanel";
+import {
+  PdfSyncContext,
+  type CitationResult,
+  type PageTarget,
+} from "./pdf/sync";
+import { PROVIDER_META } from "@/lib/llm/providers-meta";
+import type { LlmSettings } from "@/lib/llm-settings";
+import type { Citation, ServerConfig, UploadedDoc } from "@/lib/types";
 
 const ICON = { size: 20, strokeWidth: 1.75 } as const;
 // Below this width the PDF replaces the chat rather than sitting beside it.
@@ -21,13 +34,29 @@ const STEPS = [
 export default function AppShell({
   docs,
   onPageCount,
+  settings,
+  server,
+  settingsOpen,
+  onSettingsOpenChange,
+  onSaveSettings,
   children,
 }: {
   docs: UploadedDoc[];
   onPageCount: (fileId: string, pageCount: number) => void;
+  // What the app runs with: this browser's saved settings, or — when it has no
+  // key — the provider/model the server reported from its own env config.
+  settings: LlmSettings;
+  server: ServerConfig | null;
+  settingsOpen: boolean;
+  onSettingsOpenChange: (open: boolean) => void;
+  onSaveSettings: (next: LlmSettings) => void;
   children: React.ReactNode;
 }) {
   const hasDocs = docs.length > 0;
+  // A key for the running provider exists: in this browser, or on the server.
+  const keyed =
+    Boolean(settings.apiKey) ||
+    Boolean(server?.providers.includes(settings.provider));
 
   // null = "follow the viewport" (split on desktop, closed below it). The
   // default is resolved in CSS so the server-rendered markup already matches
@@ -95,6 +124,20 @@ export default function AppShell({
               <span className="truncate">Datasheet Analiz</span>
             </h1>
 
+            {!hasDocs && (
+              <p className="mt-1 text-micro text-ink-muted">
+                <a
+                  href="https://github.com/alislhyldrm/datasheet"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline-offset-2 hover:text-accent hover:underline"
+                >
+                  Ali Salih Yıldırım
+                </a>{" "}
+                tarafından geliştirildi
+              </p>
+            )}
+
             {/* Hairline separators, not decorative dots. */}
             {!hasDocs && (
               <ul className="mt-1.5 flex flex-wrap items-center text-micro text-ink-muted">
@@ -123,9 +166,33 @@ export default function AppShell({
                 onToggle={() => setOverride(!pdfOpen)}
               />
             )}
+            <button
+              type="button"
+              onClick={() => onSettingsOpenChange(true)}
+              aria-label="Model ayarları"
+              title={`${PROVIDER_META[settings.provider].label} · ${
+                settings.model || PROVIDER_META[settings.provider].defaultModel
+              }${keyed ? "" : " — anahtar gerekli"}`}
+              className="press relative flex size-11 items-center justify-center rounded-control border border-hairline text-ink-muted transition-all duration-200 ease-fluid hover:border-accent-ring hover:text-accent"
+            >
+              <Settings2 {...ICON} aria-hidden="true" />
+              {!keyed && (
+                <span
+                  aria-hidden="true"
+                  className="absolute right-1.5 top-1.5 size-2 rounded-full bg-danger"
+                />
+              )}
+            </button>
             <ThemeToggle />
           </div>
         </header>
+
+        <SettingsDialog
+          open={settingsOpen}
+          initial={settings}
+          onSave={onSaveSettings}
+          onClose={() => onSettingsOpenChange(false)}
+        />
 
         <div className="flex min-h-0 flex-1">
           {hasDocs && (
@@ -208,9 +275,7 @@ function PanelToggle({
   // control that catches the light.
   const segment = (active: boolean) =>
     `press flex h-9 items-center rounded-inner px-3.5 text-meta transition-all duration-200 ease-fluid ${
-      active
-        ? "card font-medium text-ink"
-        : "text-ink-muted hover:text-ink"
+      active ? "card font-medium text-ink" : "text-ink-muted hover:text-ink"
     }`;
 
   return (

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { toFile } from "@anthropic-ai/sdk";
-import { del, get } from "@vercel/blob";
-import { getClient, FILES_BETA, MAX_PDF_BYTES } from "@/lib/anthropic";
-import { isAllowedBlobUrl, looksLikePdf, rateLimit } from "@/lib/api-guard";
+import { MAX_PDF_BYTES } from "@/lib/limits";
+import { looksLikePdf, rateLimit } from "@/lib/api-guard";
+import { resolveProvider } from "@/lib/llm/registry";
+import { mapProviderError } from "@/lib/llm/errors";
+import { ProviderConfigError } from "@/lib/llm/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -14,103 +15,75 @@ function cleanFileName(name: unknown): string {
   return name.trim().slice(0, MAX_FILENAME_CHARS);
 }
 
-// Two input modes:
-//  - multipart/form-data with a `file` field (small PDFs, <4.5MB on Vercel)
-//  - application/json { blobUrl, fileName } (large PDFs uploaded to Vercel Blob first)
+function str(v: FormDataEntryValue | null): string | undefined {
+  return typeof v === "string" && v ? v : undefined;
+}
+
+// multipart/form-data: a `file` field plus { provider, model, apiKey } for
+// BYOK. All three credential fields fall back to env vars when absent.
 export async function POST(req: NextRequest) {
   if (!rateLimit(req, "upload", 10)) {
     return NextResponse.json(
       { error: "Çok fazla yükleme. Bir dakika sonra tekrar deneyin." },
-      { status: 429 }
+      { status: 429 },
     );
   }
 
   try {
-    const client = getClient();
-    const contentType = req.headers.get("content-type") || "";
-
-    let fileName: string;
-    let buf: Buffer;
-    // Set for the blob path: the staged object is disposable once its bytes
-    // are in hand, and leaving it would let the store serve attacker content.
-    let stagedBlobUrl: string | null = null;
-
-    if (contentType.includes("application/json")) {
-      const { blobUrl, fileName: name } = await req.json();
-      if (typeof blobUrl !== "string" || !isAllowedBlobUrl(blobUrl)) {
-        return NextResponse.json(
-          { error: "Geçersiz blob URL" },
-          { status: 400 }
-        );
-      }
-      stagedBlobUrl = blobUrl;
-      fileName = cleanFileName(name);
-      // The store is private, so the bytes come back over an authenticated
-      // read rather than a plain fetch of a guessable public URL.
-      const blob = await get(blobUrl, { access: "private" });
-      if (!blob || blob.statusCode !== 200) {
-        await discardBlob(stagedBlobUrl);
-        return NextResponse.json(
-          { error: "Yüklenen dosya alınamadı" },
-          { status: 400 }
-        );
-      }
-      buf = Buffer.from(await new Response(blob.stream).arrayBuffer());
-    } else {
-      const form = await req.formData();
-      const file = form.get("file");
-      if (!(file instanceof File)) {
-        return NextResponse.json({ error: "Dosya bulunamadı" }, { status: 400 });
-      }
-      if (file.type && file.type !== "application/pdf") {
-        return NextResponse.json(
-          { error: "Yalnızca PDF dosyaları desteklenir" },
-          { status: 415 }
-        );
-      }
-      fileName = cleanFileName(file.name);
-      buf = Buffer.from(await file.arrayBuffer());
+    const form = await req.formData();
+    const file = form.get("file");
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "Dosya bulunamadı" }, { status: 400 });
+    }
+    if (file.type && file.type !== "application/pdf") {
+      return NextResponse.json(
+        { error: "Yalnızca PDF dosyaları desteklenir" },
+        { status: 415 },
+      );
     }
 
+    const fileName = cleanFileName(file.name);
+    const buf = Buffer.from(await file.arrayBuffer());
+
     if (buf.length > MAX_PDF_BYTES) {
-      await discardBlob(stagedBlobUrl);
       return NextResponse.json(
         { error: `PDF çok büyük (max ${MAX_PDF_BYTES / (1024 * 1024)} MB)` },
-        { status: 413 }
+        { status: 413 },
       );
     }
     if (!looksLikePdf(buf)) {
-      await discardBlob(stagedBlobUrl);
       return NextResponse.json(
         { error: "Dosya geçerli bir PDF değil" },
-        { status: 415 }
+        { status: 415 },
       );
     }
 
-    const uploaded = await client.beta.files.upload({
-      file: await toFile(buf, fileName, { type: "application/pdf" }),
-      betas: [FILES_BETA],
-    });
-    await discardBlob(stagedBlobUrl);
+    const { adapter, apiKey } = resolveProvider(
+      str(form.get("provider")),
+      str(form.get("model")),
+      str(form.get("apiKey")),
+    );
 
-    return NextResponse.json({
-      fileId: uploaded.id,
-      fileName,
-      sizeBytes: buf.length,
-    });
+    try {
+      const ref = await adapter.uploadDocument({ apiKey, fileName, bytes: buf });
+      return NextResponse.json({
+        fileId: ref.id,
+        fileName: ref.fileName,
+        sizeBytes: ref.sizeBytes,
+        provider: ref.provider,
+      });
+    } catch (err) {
+      console.error("[upload]", err);
+      return NextResponse.json(
+        { error: mapProviderError(adapter.id, err) },
+        { status: 502 },
+      );
+    }
   } catch (err) {
-    // Log the real error server-side; never echo internals to the client.
+    if (err instanceof ProviderConfigError) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
     console.error("[upload]", err);
     return NextResponse.json({ error: "Yükleme başarısız" }, { status: 500 });
-  }
-}
-
-// Best-effort cleanup; a leftover blob is a storage leak, not a broken upload.
-async function discardBlob(url: string | null) {
-  if (!url) return;
-  try {
-    await del(url);
-  } catch (err) {
-    console.error("[upload] blob cleanup failed", err);
   }
 }

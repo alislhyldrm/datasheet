@@ -5,7 +5,7 @@
 // table or emphasis run still renders, and a link degrades to readable text if
 // it is ever shown raw. ChatMessage maps the `#cite-N` href back to a chip.
 
-import type { Citation, MessageSegment } from "./types";
+import type { Citation, MessageSegment } from "../types";
 
 export const CITE_HREF = /^#cite-(\d+)$/;
 

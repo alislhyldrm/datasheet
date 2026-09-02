@@ -5,7 +5,7 @@ import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { TriangleAlert } from "lucide-react";
 import type { ChatMessage as Msg } from "@/lib/types";
-import { buildMarkdown, CITE_HREF } from "@/lib/citation-markdown";
+import { buildMarkdown, CITE_HREF } from "@/lib/citations/markdown";
 import CitationChip from "./CitationChip";
 
 // A cell that opens with a sign or a digit is a measurement, not a label.

@@ -1,6 +1,6 @@
 "use client";
 import PdfViewer from "./PdfViewer";
-import type { PageTarget } from "./pdf-sync";
+import type { PageTarget } from "./sync";
 import type { UploadedDoc } from "@/lib/types";
 
 export type PdfLayout = "stacked" | "single";

@@ -3,8 +3,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { Citation } from "@/lib/types";
-import { pageLabel } from "@/lib/citation-markdown";
-import { usePdfSync } from "./pdf-sync";
+import { pageLabel } from "@/lib/citations/markdown";
+import { usePdfSync } from "./pdf/sync";
 
 const POPOVER_WIDTH = 288;
 const GAP = 8;

@@ -3,8 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
-import type { PageTarget } from "./pdf-sync";
-import { locateCitation, type MarkRect, type TextChunk } from "@/lib/pdf-highlight";
+import type { PageTarget } from "./sync";
+import {
+  locateCitation,
+  type MarkRect,
+  type TextChunk,
+} from "@/lib/pdf/highlight";
+import { loadPdfjs } from "./runtime";
 import type { UploadedDoc } from "@/lib/types";
 
 const PAGE_GAP = 12;
@@ -39,36 +44,6 @@ interface Mark {
   rects: MarkRect[];
   // A block-sized citation, drawn faint — see BROAD_SPREAD.
   broad: boolean;
-}
-
-// pdf.js touches the DOM and spawns a worker, so it must not load during SSR.
-// One worker is shared by every document in the session.
-//
-// The worker is handed to getDocument as an explicit `worker` param rather than
-// through GlobalWorkerOptions.workerPort. Both routes share one worker, but the
-// global one makes each loading task believe it OWNS that worker: closing any
-// document then calls PDFWorker.destroy(), which terminates the single shared
-// worker and breaks every other open document ("PDF açılamadı" on all of them).
-// A worker passed in explicitly is never assigned to task._worker, so document
-// lifetimes stay independent — which is what the side-by-side compare view and
-// removing one of two documents both depend on.
-let pdfjsPromise: Promise<{
-  pdfjs: typeof import("pdfjs-dist");
-  worker: import("pdfjs-dist").PDFWorker;
-}> | null = null;
-
-function loadPdfjs() {
-  pdfjsPromise ??= import("pdfjs-dist").then((pdfjs) => {
-    const port = new Worker(
-      new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url),
-      { type: "module" },
-    );
-    // create() over `new PDFWorker()`: same result for a fresh port, but its
-    // generated constructor type declares `port?: null`. Lives for the page
-    // session; nothing destroys it.
-    return { pdfjs, worker: pdfjs.PDFWorker.create({ port }) };
-  });
-  return pdfjsPromise;
 }
 
 export default function PdfViewer({

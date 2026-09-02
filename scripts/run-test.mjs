@@ -2,9 +2,19 @@
 // (/api/upload + /api/chat) with the NE555 datasheet, asks a fixed question
 // set, and checks answers + citations against the verified answer key.
 //
-// Usage: start `npm run dev` (with ANTHROPIC_API_KEY in .env.local), then:
+// Usage: start `npm run dev` (with a key in .env.local), then:
 //   node scripts/run-test.mjs
-// Optional: BASE=http://localhost:3000 node scripts/run-test.mjs
+//
+// Env:
+//   BASE=http://localhost:3000     target server
+//   PROVIDER=anthropic|openai|gemini   which adapter (default: server's env)
+//   MODEL=<model id>               override the provider default
+//   LLM_API_KEY=<key>             BYOK; omit to use the server's env key
+//
+// The verified answer key (values, pages) was built against Anthropic's native
+// citations. OpenAI and Gemini cite through a prompt contract that the browser
+// verifies against the PDF — the harness has no browser, so for those
+// providers the page check is relaxed to "a citation was produced".
 
 import fs from "node:fs";
 import path from "node:path";
@@ -13,6 +23,26 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BASE = process.env.BASE || "http://localhost:3000";
 const PDF = path.join(__dirname, "testdata", "ne555.pdf");
+const PROVIDER = process.env.PROVIDER || "";
+const MODEL = process.env.MODEL || "";
+const API_KEY = process.env.LLM_API_KEY || "";
+const NATIVE_CITES = PROVIDER === "" || PROVIDER === "anthropic";
+
+const creds = {
+  ...(PROVIDER ? { provider: PROVIDER } : {}),
+  ...(MODEL ? { model: MODEL } : {}),
+  ...(API_KEY ? { apiKey: API_KEY } : {}),
+};
+
+// A measured value plus its unit, tolerant of how the model laid it out. The
+// model may answer in prose ("100 ns") or in a markdown table
+// ("| 100 | 300 | ns |"), and both are correct — so allow a short run of other
+// cells between the number and its unit, but stay on one line so this can't
+// match a number here and a unit three paragraphs down.
+function val(number, unit) {
+  const n = String(number).replace(".", "\\.");
+  return new RegExp(`(?<![\\d.])${n}(?![\\d])[^\\n]{0,24}?${unit}`, "i");
+}
 
 // Each check: expected regexes (all must match, case-insensitive), pages that a
 // citation should land on (any one is enough), and trap=true for "must say not
@@ -20,12 +50,12 @@ const PDF = path.join(__dirname, "testdata", "ne555.pdf");
 const CASES = [
   {
     q: "Absolute maximum VCC (supply voltage) kaç volt?",
-    expect: [/18\s*V/i],
+    expect: [val(18, "V")],
     pages: [4],
   },
   {
     q: "Absolute maximum output current nedir?",
-    expect: [/(±|\+\/-|\+-)?\s*225\s*mA/i],
+    expect: [val(225, "mA")],
     pages: [4],
   },
   {
@@ -35,7 +65,7 @@ const CASES = [
   },
   {
     q: "NE555 için recommended besleme gerilimi (VCC) aralığı nedir?",
-    expect: [/4\.5/, /16\s*V/i],
+    expect: [/4\.5/, val(16, "V")],
     pages: [4],
   },
   {
@@ -55,27 +85,27 @@ const CASES = [
   },
   {
     q: "Çıkış low durumunda, VCC=15V iken NE555 supply current typ ve max değeri?",
-    expect: [/10\s*mA/i, /15\s*mA/i],
+    expect: [val(10, "mA"), val(15, "mA")],
     pages: [6],
   },
   {
     q: "Output pulse rise time (tr) typ ve max değeri nedir, hangi koşulda?",
-    expect: [/100\s*ns/i, /300\s*ns/i, /15\s*pF/i],
+    expect: [val(100, "ns"), val(300, "ns"), val(15, "pF")],
     pages: [7],
   },
   {
     q: "VCC=5V, IOL=8mA iken NE555 low-level output voltage typ ve max?",
-    expect: [/0\.15\s*V/i, /0\.4\s*V/i],
+    expect: [val("0.15", "V"), val("0.4", "V")],
     pages: [6],
   },
   {
     q: "ESD HBM (human body model) rating değeri nedir?",
-    expect: [/(±|\+\/-|\+-)?\s*500\s*V/i],
+    expect: [val(500, "V")],
     pages: [4],
   },
   {
     q: "NE555 ile SE555 arasında maksimum VCC farkı nedir?",
-    expect: [/16\s*V/i, /18\s*V/i],
+    expect: [val(16, "V"), val(18, "V")],
     pages: [3, 4],
   },
   {
@@ -95,6 +125,7 @@ async function uploadPdf() {
   const blob = new Blob([buf], { type: "application/pdf" });
   const fd = new FormData();
   fd.append("file", blob, "ne555.pdf");
+  for (const [k, v] of Object.entries(creds)) fd.append(k, v);
   const res = await fetch(`${BASE}/api/upload`, { method: "POST", body: fd });
   if (!res.ok) {
     throw new Error(`upload failed ${res.status}: ${await res.text()}`);
@@ -111,6 +142,7 @@ async function ask(fileId, fileName, question) {
       fileNames: [fileName],
       question,
       history: [],
+      ...creds,
     }),
   });
   if (!res.ok || !res.body) {
@@ -161,22 +193,31 @@ function checkCase(c, res) {
     if (!re.test(t)) problems.push(`beklenen eşleşmedi: ${re}`);
   }
   if (c.pages) {
-    const hit = res.citations.some(
-      (ci) => ci.startPage != null && c.pages.includes(ci.startPage)
-    );
-    if (res.citations.length === 0) problems.push("citation yok");
-    else if (!hit)
-      problems.push(
-        `citation sayfası beklenenle uyuşmadı (beklenen ${c.pages.join(
-          "/"
-        )}, gelen ${res.citations.map((x) => x.startPage).join(",")})`
+    if (res.citations.length === 0) {
+      problems.push("citation yok");
+    } else if (NATIVE_CITES) {
+      const hit = res.citations.some(
+        (ci) => ci.startPage != null && c.pages.includes(ci.startPage)
       );
+      if (!hit)
+        problems.push(
+          `citation sayfası beklenenle uyuşmadı (beklenen ${c.pages.join(
+            "/"
+          )}, gelen ${res.citations.map((x) => x.startPage).join(",")})`
+        );
+    }
+    // Non-native providers: page verified client-side, not here — presence is
+    // all the harness can check.
   }
   return problems;
 }
 
 async function main() {
-  console.log(`Test hedefi: ${BASE}\nDatasheet: ${PDF}\n`);
+  console.log(
+    `Test hedefi: ${BASE}\nSağlayıcı: ${PROVIDER || "(sunucu env)"}${
+      MODEL ? ` / ${MODEL}` : ""
+    }\nDatasheet: ${PDF}\n`
+  );
   const up = await uploadPdf();
   console.log(`Yüklendi: ${up.fileId} (${up.fileName}, ${up.sizeBytes} B)\n`);
 

@@ -1,3 +1,6 @@
+import type { ProviderId } from "./llm/types";
+import { citationContract } from "./llm/citation-contract";
+
 export const SYSTEM_PROMPT = `You are a senior electronics engineer assisting other engineers with datasheet analysis. The user has uploaded one or more component datasheets (PDF) into this conversation. Your entire job is to answer questions using ONLY the information physically present in those datasheets.
 
 # ABSOLUTE RULES (never violate)
@@ -39,3 +42,14 @@ When asked "is this compatible with my 3.3 V / 5 V system?" or similar:
 - Use monospace-friendly notation for values (V_CC, I_OH, t_PLH).
 - Reply in the SAME LANGUAGE as the question: Turkish question → Turkish answer, English question → English answer. Keep spec symbols/units in their standard form regardless of language.
 - If the datasheet genuinely does not contain the answer, the correct response is to say it is not in the document — that is a good answer, not a failure.`;
+
+// Anthropic returns structured citations through its API, so it gets the base
+// prompt untouched. OpenAI and Gemini have no such channel on the direct-PDF
+// path, so they get the base prompt plus the inline citation-marker contract.
+export function assembleSystemPrompt(
+  provider: ProviderId,
+  multiDoc: boolean,
+): string {
+  if (provider === "anthropic") return SYSTEM_PROMPT;
+  return `${SYSTEM_PROMPT}\n\n${citationContract(multiDoc)}`;
+}

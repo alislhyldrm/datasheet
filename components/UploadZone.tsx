@@ -2,22 +2,20 @@
 
 import { useRef, useState } from "react";
 import { Plus, Upload } from "lucide-react";
-import {
-  MAX_LABEL,
-  uploadPdf,
-  validatePdf,
-  type UploadPhase,
-} from "@/lib/upload-client";
+import { uploadPdf, validatePdf, type UploadPhase } from "@/lib/upload-client";
+import type { LlmSettings } from "@/lib/llm-settings";
 import type { UploadedDoc } from "@/lib/types";
 
 export default function UploadZone({
   onUploaded,
   label,
   compact,
+  settings,
 }: {
   onUploaded: (doc: UploadedDoc) => void;
   label: string;
   compact?: boolean;
+  settings: LlmSettings;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const lastFile = useRef<File | null>(null);
@@ -45,7 +43,7 @@ export default function UploadZone({
     setPhase("uploading");
     setFraction(0);
     try {
-      const doc = await uploadPdf(file, (nextPhase, nextFraction) => {
+      const doc = await uploadPdf(file, settings, (nextPhase, nextFraction) => {
         setPhase(nextPhase);
         setFraction(nextFraction);
       });
@@ -113,7 +111,7 @@ export default function UploadZone({
               {label}
             </span>
             <span className="mt-1.5 text-body text-ink-muted">
-              Sürükle bırak veya seç. PDF, en fazla {MAX_LABEL}.
+              Sürükle bırak veya seç.
             </span>
           </>
         )}

@@ -1,20 +1,9 @@
 import type { UploadedDoc } from "./types";
+import { MAX_PDF_BYTES } from "./limits";
+import { requestCredentials, type LlmSettings } from "./llm-settings";
 
-// Vercel caps a serverless request body at ~4.5MB, so anything bigger has to
-// take the Blob detour below. Self-hosted on a plain Node server there is no
-// such cap; raising this to MAX_BYTES there sends every PDF straight through
-// /api/upload and leaves the detour dead.
-const DIRECT_LIMIT = 4 * 1024 * 1024;
-// Mirrors MAX_PDF_BYTES in lib/anthropic.ts, which is server-only. Checking it
-// here turns a wasted 100MB upload into an instant, specific error.
-const MAX_BYTES = 100 * 1024 * 1024;
-
-/** Both limits as user-facing labels, so no copy can quote a stale number. */
-export const MAX_LABEL = `${MAX_BYTES / (1024 * 1024)} MB`;
-const DIRECT_LABEL = `${DIRECT_LIMIT / (1024 * 1024)} MB`;
-// The blob upload is the long part; the server still has to fetch it and hand
-// it to Anthropic, so leave headroom rather than sitting at 100% while waiting.
-const BLOB_SHARE = 0.95;
+/** The limit as a user-facing label, so no copy can quote a stale number. */
+export const MAX_LABEL = `${MAX_PDF_BYTES / (1024 * 1024)} MB`;
 
 export type UploadPhase = "uploading" | "processing";
 export type ProgressHandler = (phase: UploadPhase, fraction: number) => void;
@@ -29,58 +18,35 @@ export function validatePdf(file: File): string | null {
   if (!isPdf) {
     return "Bu bir PDF değil. Datasheet'in PDF sürümünü seç.";
   }
-  if (file.size > MAX_BYTES) {
+  if (file.size > MAX_PDF_BYTES) {
     return `PDF ${MAX_LABEL} sınırını aşıyor (${formatMb(file.size)}). Daha küçük bir dosya seç.`;
   }
   return null;
 }
 
-export async function uploadPdf(
+/**
+ * POST the PDF to /api/upload, which forwards it to the configured provider's
+ * Files API. One request, whatever the size — the app runs on a plain Node
+ * server, so there is no serverless request-body cap to work around.
+ *
+ * fetch() cannot report upload progress; XMLHttpRequest still can.
+ */
+export function uploadPdf(
   file: File,
+  settings: LlmSettings,
   onProgress?: ProgressHandler,
 ): Promise<UploadedDoc> {
   const invalid = validatePdf(file);
-  if (invalid) throw new Error(invalid);
+  if (invalid) return Promise.reject(new Error(invalid));
 
-  if (file.size <= DIRECT_LIMIT) {
-    return postDirect(file, onProgress);
-  }
-
-  // Large file: client-direct upload to Vercel Blob, then hand the URL back.
-  const { upload } = await import("@vercel/blob/client");
-  let blob;
-  try {
-    blob = await upload(file.name, file, {
-      access: "private",
-      handleUploadUrl: "/api/blob-upload",
-      contentType: "application/pdf",
-      onUploadProgress: ({ percentage }) =>
-        onProgress?.("uploading", (percentage / 100) * BLOB_SHARE),
-    });
-  } catch {
-    throw new Error(
-      `Büyük dosya yükleme yapılandırılmamış (Vercel Blob gerekli). ${DIRECT_LABEL} altı PDF deneyin.`,
-    );
-  }
-
-  onProgress?.("processing", 1);
-  const res = await fetch("/api/upload", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
-  });
-  if (!res.ok) throw new Error(await errorText(res));
-  return res.json();
-}
-
-// fetch() cannot report upload progress; XMLHttpRequest still can.
-function postDirect(
-  file: File,
-  onProgress?: ProgressHandler,
-): Promise<UploadedDoc> {
   return new Promise((resolve, reject) => {
     const form = new FormData();
     form.append("file", file);
+    // Omitted entirely when the browser has no key: the server then uses its
+    // own env config rather than being told a provider it has no key for.
+    for (const [field, value] of Object.entries(requestCredentials(settings))) {
+      form.append(field, value);
+    }
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/upload");
@@ -107,13 +73,4 @@ function postDirect(
 
     xhr.send(form);
   });
-}
-
-async function errorText(res: Response): Promise<string> {
-  try {
-    const j = await res.json();
-    return j.error || `Hata ${res.status}`;
-  } catch {
-    return `Hata ${res.status}`;
-  }
 }

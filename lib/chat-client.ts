@@ -1,10 +1,12 @@
 import type { ChatStreamEvent, HistoryTurn } from "./types";
+import { requestCredentials, type LlmSettings } from "./llm-settings";
 
 interface StreamArgs {
   fileIds: string[];
   fileNames: string[];
   question: string;
   history: HistoryTurn[];
+  settings: LlmSettings;
   onEvent: (e: ChatStreamEvent) => void;
   signal?: AbortSignal;
 }
@@ -15,13 +17,20 @@ export async function streamChat({
   fileNames,
   question,
   history,
+  settings,
   onEvent,
   signal,
 }: StreamArgs): Promise<void> {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ fileIds, fileNames, question, history }),
+    body: JSON.stringify({
+      fileIds,
+      fileNames,
+      question,
+      history,
+      ...requestCredentials(settings),
+    }),
     signal,
   });
 

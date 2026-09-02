@@ -1,9 +1,8 @@
-// Shared request guards for the API routes: per-IP rate limiting and the
-// blob-URL allowlist that closes the SSRF hole in /api/upload.
+// Shared request guards for the API routes: per-IP rate limiting and a PDF
+// magic-byte check.
 //
-// The limiter is in-memory, so on serverless each warm instance counts
-// separately — it blunts abuse rather than enforcing an exact global quota.
-// For hard guarantees put Vercel WAF or a shared store (e.g. Upstash) in front.
+// The limiter is in-memory and per-process — it blunts accidental hammering on
+// a self-hosted instance rather than enforcing an exact global quota.
 
 const WINDOW_MS = 60_000;
 
@@ -21,8 +20,8 @@ function prune(now: number) {
   }
 }
 
-export function clientIp(req: Request): string {
-  // Vercel/proxies set x-forwarded-for; the first hop is the client.
+function clientIp(req: Request): string {
+  // Reverse proxies set x-forwarded-for; the first hop is the client.
   const fwd = req.headers.get("x-forwarded-for");
   if (fwd) return fwd.split(",")[0].trim();
   return req.headers.get("x-real-ip") ?? "unknown";
@@ -40,20 +39,6 @@ export function rateLimit(req: Request, scope: string, limit: number): boolean {
   }
   bucket.count += 1;
   return bucket.count <= limit;
-}
-
-// Client uploads land on the store's private host; anything else (internal IPs,
-// metadata endpoints, other schemes) must never be reachable from the server.
-const BLOB_HOST_SUFFIX = ".private.blob.vercel-storage.com";
-
-export function isAllowedBlobUrl(raw: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    return false;
-  }
-  return url.protocol === "https:" && url.hostname.endsWith(BLOB_HOST_SUFFIX);
 }
 
 // PDF files must start with "%PDF-" — rejects arbitrary content smuggled in
