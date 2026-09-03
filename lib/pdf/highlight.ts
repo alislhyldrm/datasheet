@@ -29,12 +29,18 @@ const DROP = /[\s\u002d\u00ad\u2010-\u2015\u2212\ufe58\ufe63\uff0d\u200b-\u200d\
 const APOSTROPHE = /[\u2018\u2019\u201a\u201b\u2032\u00b4\u02bc]/;
 const QUOTE = /[\u201c\u201d\u201e\u201f\u2033]/;
 
-// A citation shorter than this matches too much of the page to be worth
-// drawing — a bare "18 V" would land on the first of a dozen occurrences.
-const MIN_MATCH = 8;
-// Tried in order when the full citation doesn't match: the tail is what
-// re-flowing mangles, so anchoring on the head recovers most misses.
-const PREFIXES = [200, 96, 48, 24];
+// A citation shorter than this carries no signal: a bare "18 V" would land on
+// the first of a dozen occurrences.
+export const MIN_QUOTE = 4;
+// A run of this many characters is the shortest piece of a quote worth
+// anchoring on. Shorter runs turn common syllables into matches and every page
+// starts scoring.
+const MIN_RUN = 5;
+// Matched runs spread wider than this multiple of the quote are a scatter, not
+// the quoted line: fall back to the longest single run.
+const SPAN_SLACK = 2;
+// Below this share of the quote, what matched is coincidence.
+const MIN_SCORE = 0.6;
 
 // Baselines this close belong to the same line — enough to pull a subscript
 // into the row it annotates, not enough to reach the next table row.
@@ -60,6 +66,80 @@ export function compact(text: string): string {
   let out = "";
   for (const ch of text) out += mapChar(ch);
   return out;
+}
+
+/** Where a quote sits in a text, and how much of it actually matched. */
+export interface QuoteMatch {
+  start: number;
+  end: number;
+  // Matched characters over quote length, 0..1.
+  score: number;
+}
+
+/**
+ * Find a compacted quote inside a compacted text, tolerating the ways the two
+ * extractions disagree. An exact hit is the common case; when it misses, the
+ * quote is walked in greedy runs so a footnote marker the model left out
+ * ("V_CC supply voltage (2) 18 V" vs "VCC supply voltage 18 V") costs a few
+ * characters of score instead of the whole citation. Both arguments must
+ * already be through `compact`.
+ */
+export function matchQuote(
+  haystack: string,
+  needle: string,
+): QuoteMatch | null {
+  if (needle.length < MIN_QUOTE || haystack.length === 0) return null;
+
+  const exact = haystack.indexOf(needle);
+  if (exact >= 0) {
+    return { start: exact, end: exact + needle.length, score: 1 };
+  }
+  // Too short to break into runs: an exact hit was its only chance.
+  if (needle.length < MIN_RUN) return null;
+
+  let matched = 0;
+  let spanStart = -1;
+  let spanEnd = -1;
+  let longest = { start: -1, end: -1, length: 0 };
+  // Runs are searched forward from the previous one so a quote maps onto the
+  // page in reading order; only a run that has no hit ahead falls back to the
+  // whole page, since pdf.js can emit a row's cells out of order.
+  let from = 0;
+
+  for (let i = 0; i + MIN_RUN <= needle.length;) {
+    let at = haystack.indexOf(needle.slice(i, i + MIN_RUN), from);
+    if (at < 0 && from > 0) at = haystack.indexOf(needle.slice(i, i + MIN_RUN));
+    if (at < 0) {
+      i++;
+      continue;
+    }
+    // Grow the run one character at a time; each step re-searches, so the run
+    // slides to whichever occurrence carries the longer match.
+    let length = MIN_RUN;
+    while (i + length < needle.length) {
+      const next = haystack.indexOf(needle.slice(i, i + length + 1), at);
+      if (next < 0) break;
+      at = next;
+      length++;
+    }
+
+    matched += length;
+    if (length > longest.length) {
+      longest = { start: at, end: at + length, length };
+    }
+    spanStart = spanStart < 0 ? at : Math.min(spanStart, at);
+    spanEnd = Math.max(spanEnd, at + length);
+    from = at + length;
+    i += length;
+  }
+
+  if (matched === 0) return null;
+
+  const score = matched / needle.length;
+  const scattered = spanEnd - spanStart > needle.length * SPAN_SLACK;
+  return scattered
+    ? { start: longest.start, end: longest.end, score }
+    : { start: spanStart, end: spanEnd, score };
 }
 
 // The page as one whitespace-free string, with every character remembering the
@@ -210,25 +290,17 @@ export function locateCitation({
   viewportMatrix: number[];
 }): MarkRect[] {
   const needle = compact(citedText);
-  if (needle.length < MIN_MATCH || chunks.length === 0) return [];
+  if (needle.length < MIN_QUOTE || chunks.length === 0) return [];
 
   const hay = buildHaystack(chunks);
-  let at = hay.text.indexOf(needle);
-  let length = needle.length;
-
-  for (const prefix of PREFIXES) {
-    if (at >= 0) break;
-    if (prefix >= needle.length || prefix < MIN_MATCH) continue;
-    at = hay.text.indexOf(needle.slice(0, prefix));
-    length = prefix;
-  }
-  if (at < 0) return [];
+  const match = matchQuote(hay.text, needle);
+  if (!match || match.score < MIN_SCORE) return [];
 
   // Walk the matched range, cutting it at every chunk boundary.
   const spans: Span[] = [];
-  let runStart = at;
-  for (let i = at + 1; i <= at + length; i++) {
-    const ended = i === at + length || hay.chunk[i] !== hay.chunk[runStart];
+  let runStart = match.start;
+  for (let i = match.start + 1; i <= match.end; i++) {
+    const ended = i === match.end || hay.chunk[i] !== hay.chunk[runStart];
     if (!ended) continue;
     const chunk = chunks[hay.chunk[runStart]];
     const rect = sliceRect(

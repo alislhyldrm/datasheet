@@ -14,6 +14,10 @@ import type { Citation, ChatStreamEvent } from "@/lib/types";
 const OPEN = "[[cite:";
 const CLOSE = "]]";
 const MAX_QUOTE = 240;
+// The browser locates the quote in the PDF's own text to fix the page and to
+// highlight the line. A two-word quote ("3 SNS") matches nothing or everything,
+// so the contract asks for the whole row instead.
+const MIN_QUOTE = 15;
 
 export function citationContract(multiDoc: boolean): string {
   const dPart = multiDoc
@@ -25,13 +29,16 @@ This interface has no structured citation channel, so you MUST mark every source
 
 - Immediately AFTER any sentence that reports a value, spec, pin, condition, or claim taken from the datasheet, append a marker: \`${OPEN}page=<n>|<verbatim quote>${CLOSE}\`
   - \`<n>\` is the PDF page number the value is printed on. A span is \`page=4-5\`. If you genuinely cannot tell the page, write \`page=?\`.
-  - \`<verbatim quote>\` is text copied EXACTLY from the datasheet (max ${MAX_QUOTE} characters) — the row, cell, or line the value comes from. Do not paraphrase, translate, or reformat it. No newlines inside the quote.
+  - \`<verbatim quote>\` is text copied EXACTLY from the datasheet (${MIN_QUOTE}-${MAX_QUOTE} characters) — the WHOLE row or line the value comes from, in the order it is printed. Do not paraphrase, translate, or reformat it. No newlines inside the quote.
+  - The quote is looked up in the PDF's own text, so it must be long enough to be findable: never quote a bare number, symbol, or pin name on its own. If the cell itself is short, widen the quote to the full row — parameter name, value, unit, conditions. For a pin, quote the pin's whole table row (\`3 SNS I Current sense input\`), not just its number and name.
   - No space before the marker. Put it before the sentence's closing punctuation is fine too.${dPart}
 - One marker per source. If a sentence draws on two rows, use two markers back to back.
 - Do NOT wrap the marker in backticks, quotes, or parentheses. Write it raw.
 - If a fact is not in the datasheet, say so and emit no marker. Never invent a page or a quote to satisfy this format.
 
-Example: \`Absolute maximum V_CC is 18 V.${OPEN}page=4|Supply voltage, V_CC ................ 18 V${CLOSE}\``;
+Examples:
+\`Absolute maximum V_CC is 18 V.${OPEN}page=4|VCC Supply voltage (2) 18 V${CLOSE}\`
+\`Pin 3 SNS akım algılama girişidir.${OPEN}page=7|3 SNS I Current sense input. Connect to the sense resistor${CLOSE}\``;
 }
 
 function parseMarker(inner: string, multiDoc: boolean): Citation | null {
