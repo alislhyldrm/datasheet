@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { MAX_PDF_BYTES } from "@/lib/limits";
+import { maxPdfBytes } from "@/lib/limits";
 import { looksLikePdf, rateLimit } from "@/lib/api-guard";
 import { resolveProvider } from "@/lib/llm/registry";
 import { mapProviderError } from "@/lib/llm/errors";
@@ -45,6 +45,14 @@ export async function POST(req: NextRequest) {
     const fileName = cleanFileName(file.name);
     const buf = Buffer.from(await file.arrayBuffer());
 
+    const { adapter, apiKey } = resolveProvider(
+      str(form.get("provider")),
+      str(form.get("model")),
+      str(form.get("apiKey")),
+    );
+    const maxBytes = maxPdfBytes(adapter.id);
+    const MAX_PDF_BYTES = maxBytes;
+
     if (buf.length > MAX_PDF_BYTES) {
       return NextResponse.json(
         { error: `PDF çok büyük (max ${MAX_PDF_BYTES / (1024 * 1024)} MB)` },
@@ -57,12 +65,6 @@ export async function POST(req: NextRequest) {
         { status: 415 },
       );
     }
-
-    const { adapter, apiKey } = resolveProvider(
-      str(form.get("provider")),
-      str(form.get("model")),
-      str(form.get("apiKey")),
-    );
 
     try {
       const ref = await adapter.uploadDocument({ apiKey, fileName, bytes: buf });

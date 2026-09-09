@@ -24,8 +24,8 @@ export interface ProviderCapabilities {
 // chat route rejects a ref whose provider is not the active one.
 export interface ProviderDocumentRef {
   provider: ProviderId;
-  // Opaque provider handle: "file_..." (Anthropic), "file-..." (OpenAI),
-  // "files/..." (Gemini). Never parsed, only echoed back to its provider.
+  // Opaque provider handle. Anthropic uses a local in-memory id; OpenAI and
+  // Gemini use their own Files API ids. Never parsed outside its adapter.
   id: string;
   fileName: string;
   sizeBytes: number;

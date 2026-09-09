@@ -6,9 +6,9 @@ export interface UploadedDoc {
   fileId: string;
   fileName: string;
   sizeBytes: number;
-  // Which provider's Files API holds this PDF. A doc uploaded to one provider
-  // cannot be queried through another, so the chat route rejects a mismatch
-  // and the client clears its docs when the provider changes.
+  // Which provider owns this PDF reference. A doc uploaded to one provider
+  // cannot be queried through another, so the client clears its docs when the
+  // provider changes.
   provider: ProviderId;
   // Client-only fields; the API contract is unchanged. `objectUrl` points at
   // the File the user picked, so the viewer never re-downloads the PDF. It

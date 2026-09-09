@@ -10,7 +10,7 @@
     "test": "node scripts/run-test.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.110.0",
+    "@anthropic-ai/sdk": "^0.124.0",
     "@google/genai": "^2.20.0",
     "lucide-react": "^1.24.0",
     "next": "16.2.10",
